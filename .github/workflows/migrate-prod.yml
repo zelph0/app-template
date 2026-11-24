@@ -1,0 +1,75 @@
+name: Production migrate & deploy
+
+# After merge to main: apply migrations to the production Neon branch, THEN deploy and
+# promote production on Vercel. Git-triggered production deploys are off (vercel.json), so
+# production never runs code whose migrations haven't been applied. Never migrate prod by hand.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    name: migrate production
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    steps:
+      - name: Skip when production isn't provisioned yet
+        id: guard
+        env:
+          URL: ${{ secrets.PROD_DATABASE_URL_UNPOOLED }}
+        run: |
+          if [ -z "$URL" ]; then
+            echo "PROD_DATABASE_URL_UNPOOLED is not set: nothing to migrate (template repo or app not provisioned)."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v7
+        if: steps.guard.outputs.run == 'true'
+      - uses: pnpm/action-setup@v6
+        if: steps.guard.outputs.run == 'true'
+      - uses: actions/setup-node@v7
+        if: steps.guard.outputs.run == 'true'
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - if: steps.guard.outputs.run == 'true'
+        run: pnpm install --frozen-lockfile
+      - name: prisma migrate deploy (production)
+        if: steps.guard.outputs.run == 'true'
+        run: pnpm db:deploy
+        env:
+          DATABASE_URL_UNPOOLED: ${{ secrets.PROD_DATABASE_URL_UNPOOLED }}
+    outputs:
+      ran: ${{ steps.guard.outputs.run }}
+
+  deploy:
+    name: deploy & promote production
+    needs: migrate
+    if: vars.VERCEL_PROJECT_ID != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - name: Deploy to production (builds on Vercel, promotes on success)
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+        run: pnpm dlx vercel@48.8.0 deploy --prod --yes --token "$VERCEL_TOKEN"
