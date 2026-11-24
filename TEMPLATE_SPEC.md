@@ -8,22 +8,22 @@ Build the template **once**, well. Every future app starts from it.
 
 ## Decisions already made
 
-| Area | Choice | Notes |
-|---|---|---|
-| Framework | Next.js (App Router) + TypeScript | |
-| Styling | Tailwind + shadcn/ui | Theming via CSS variables. Per-app styling changes tokens AND component variants (shape, density, borders, motion), not just colors |
-| Database | Neon Postgres | Branching is the core safety model |
-| ORM | Prisma (7.x or 8.x, VERIFY FIRST) | Rust-free client; use the Neon adapter for serverless. Prisma 8 changes the query API, and sources disagree on whether it's stable yet. Check prisma.io docs and pick the current stable major before building, then pin it |
-| Auth (optional) | Neon managed Better Auth (`@neondatabase/auth`) | Users and sessions live in Postgres and branch with the data. Lives in its own module, so it can be removed cleanly |
-| Hosting | Vercel | Production + preview deploy per PR |
-| Validation | Zod | Forms, server actions and env vars |
-| Env vars | `@t3-oss/env-nextjs` | Build fails on missing vars |
-| Unit tests | Vitest | |
-| E2E tests | Playwright | Runs against preview deploys too |
-| Lint/format | Biome | |
-| Package manager | pnpm, pinned via `packageManager` + `.nvmrc` | |
-| Errors | Sentry | |
-| Email | Resend | Needed for auth verification / reset |
+| Area            | Choice                                          | Notes                                                                                                                                                                                                                       |
+| --------------- | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Framework       | Next.js (App Router) + TypeScript               |                                                                                                                                                                                                                             |
+| Styling         | Tailwind + shadcn/ui                            | Theming via CSS variables. Per-app styling changes tokens AND component variants (shape, density, borders, motion), not just colors                                                                                         |
+| Database        | Neon Postgres                                   | Branching is the core safety model                                                                                                                                                                                          |
+| ORM             | Prisma (7.x or 8.x, VERIFY FIRST)               | Rust-free client; use the Neon adapter for serverless. Prisma 8 changes the query API, and sources disagree on whether it's stable yet. Check prisma.io docs and pick the current stable major before building, then pin it |
+| Auth (optional) | Neon managed Better Auth (`@neondatabase/auth`) | Users and sessions live in Postgres and branch with the data. Lives in its own module, so it can be removed cleanly                                                                                                         |
+| Hosting         | Vercel                                          | Production + preview deploy per PR                                                                                                                                                                                          |
+| Validation      | Zod                                             | Forms, server actions and env vars                                                                                                                                                                                          |
+| Env vars        | `@t3-oss/env-nextjs`                            | Build fails on missing vars                                                                                                                                                                                                 |
+| Unit tests      | Vitest                                          |                                                                                                                                                                                                                             |
+| E2E tests       | Playwright                                      | Runs against preview deploys too                                                                                                                                                                                            |
+| Lint/format     | Biome                                           |                                                                                                                                                                                                                             |
+| Package manager | pnpm, pinned via `packageManager` + `.nvmrc`    |                                                                                                                                                                                                                             |
+| Errors          | Sentry                                          |                                                                                                                                                                                                                             |
+| Email           | Resend                                          | Needed for auth verification / reset                                                                                                                                                                                        |
 
 Optional toggles for the questionnaire (NOT in the base): analytics (PostHog / Vercel Analytics), file uploads (Vercel Blob), rate limiting (Upstash), background jobs.
 
@@ -36,10 +36,12 @@ Deliberately excluded: state management library, tRPC/separate API layer, Docker
 Official sources only. Read any community skill before installing it.
 
 **User-level (once, on my machine):**
+
 - `frontend-design` (Anthropic): `/plugin install frontend-design@claude-plugins-official`, then `/reload-plugins`. Used for the per-app styling step. Do NOT add a second design skill.
 - `skill-creator` (Anthropic): for building and testing the `/new-app` skill.
 
 **Project-level (committed in the template's `.claude/skills` / `.mcp.json`):**
+
 - shadcn skill: `npx skills add shadcn/ui`
 - shadcn MCP: `pnpm dlx shadcn@latest mcp init --client claude`
 - Neon MCP + skills: `npx neon@latest init` (scope the MCP to dev/preview branches)
@@ -92,6 +94,7 @@ security headers + metadata/OG defaults
 ### Reference feature (most important for AI-first)
 
 One small, complete feature (e.g. Notes or Tasks) built exactly the way every feature should be built:
+
 - Prisma model + migration
 - Server action with Zod validation
 - Page with loading, empty and error states
@@ -106,6 +109,7 @@ Claude copies existing patterns more reliably than it follows written rules.
 `disable-model-invocation: true`, so it runs only when typed.
 
 Questionnaire (multiple choice where possible):
+
 1. App name / slug
 2. Include auth? If yes: which providers (email/OTP, Google, GitHub)
 3. Styling: a short description of the vibe, plus optional reference URLs/screenshots → Claude generates tokens (palette, fonts, radius, light/dark) and adjusts component variants

@@ -1,5 +1,5 @@
 /*
- * Design tokens: the ONLY file the /new-app styling step rewrites (plus src/styles/fonts.ts).
+ * Design tokens: the ONLY file the /new-app styling step rewrites (plus src/config/fonts.ts).
  * Components never hard-code colour, radius, border width, control height, surface padding,
  * shadow or motion. They read these variables, so changing a token changes shape, density,
  * borders and motion as well as colour. Verify changes on /styleguide in light and dark.
