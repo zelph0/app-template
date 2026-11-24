@@ -17,6 +17,8 @@ export async function proxy(request: NextRequest) {
   if (location) {
     const target = new URL(location, request.url);
     if (target.pathname === "/auth/sign-in" && !target.searchParams.has("next")) {
+      // Neon's middleware copies the original query onto the login URL; keep only `next`.
+      target.search = "";
       target.searchParams.set("next", request.nextUrl.pathname + request.nextUrl.search);
       response.headers.set("location", target.toString());
     }
