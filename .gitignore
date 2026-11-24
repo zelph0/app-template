@@ -51,3 +51,4 @@ next-env.d.ts
 
 # allow the committed example env file
 !.env.example
+.neon
