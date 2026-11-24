@@ -12,6 +12,7 @@
  *   - src/modules/auth/ and tests/e2e/auth/                    -> deleted
  *   - the `@neon/auth` dependency in package.json             -> removed
  */
+import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 
@@ -119,7 +120,20 @@ export function removeAuth(root: string, { dryRun = false } = {}): Change[] {
     if (!dryRun) writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
   }
 
+  if (!dryRun) formatRewritten(root, changes);
   return changes;
+}
+
+/** Re-formats rewritten files so the no-auth variant passes `biome check` immediately. */
+function formatRewritten(root: string, changes: Change[]) {
+  const biome = join(root, "node_modules/.bin/biome");
+  const files = changes.filter((c) => c.action === "rewritten" && c.path !== "package.json").map((c) => c.path);
+  if (files.length === 0) return;
+  if (!existsSync(biome)) {
+    console.warn("Biome isn't installed here yet: run `pnpm install && pnpm lint:fix` after this.");
+    return;
+  }
+  execFileSync(biome, ["format", "--write", ...files], { cwd: root, stdio: "ignore" });
 }
 
 const isMain = process.argv[1] && relative(process.cwd(), process.argv[1]).endsWith("scripts/remove-auth.ts");
