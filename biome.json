@@ -15,7 +15,8 @@
       "!playwright-report",
       "!test-results",
       "!.claude/skills",
-      "!.agents"
+      "!.agents",
+      "!**/*.md"
     ]
   },
   "formatter": {
