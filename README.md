@@ -13,10 +13,10 @@ Playwright · Biome · pnpm. The reasons behind each choice are in [`docs/decisi
 |---|---|---|
 | 1. This template | The base app, tests, CI and Claude Code setup | ✅ Done |
 | 2. Provisioning script | One command that creates a new app: GitHub repo, Neon database, Vercel project, secrets | ✅ Built (`pnpm provision`) |
-| 3. `/new-app` skill | Claude asks you a few questions (name, sign-in, style) and runs the script | Not built yet |
+| 3. `/new-app` skill | Claude asks you a few questions (name, sign-in, style), shows style options, runs the script | ✅ Built (`/new-app`) |
 
-So today you can **work on the template** and **create a new app with one command** (see below).
-Step 3 will wrap that command in a few questions inside Claude Code.
+So today you can **work on the template** and **create a new app** by typing `/new-app` in Claude
+Code (see below).
 
 ---
 
@@ -71,9 +71,22 @@ pnpm exec vercel login
 ```
 
 Also once: give the [Vercel GitHub app](https://github.com/apps/vercel/installations/new) access to
-"All repositories", so new repos can be connected without a browser.
+"All repositories", so new repos can be connected without a browser. Then make `/new-app` available
+in every Claude Code session (run it in this repo):
 
-Then, from this repo:
+```bash
+pnpm skill:link
+```
+
+Then type **`/new-app`** in Claude Code, from any folder. Claude asks for:
+- a name and a sentence about the app;
+- the sign-in you want;
+- the look you're after (a vibe, optional colours, optional example sites).
+
+It creates the app, then shows 3–4 style options side by side on the app's real screens. You pick
+one (or a mix, or ask for another round), and it opens the app's first PR with that style.
+
+Under the hood it runs `pnpm provision`, which you can also run yourself:
 
 ```bash
 pnpm provision my-app --name "My App" --description "One sentence about it."
@@ -192,6 +205,8 @@ pnpm db:test && pnpm test && pnpm test:integration && pnpm test:e2e
 | `pnpm auth:remove` | Remove sign-in entirely (for apps that don't need accounts) |
 | `pnpm provision <slug>` | Create a new app from this template (see above) |
 | `pnpm deprovision <slug>` | Delete an app's repo, Vercel project and database (asks first) |
+| `pnpm skill:link` | Make `/new-app` available in every Claude Code session on this computer |
+| `pnpm style:check` / `pnpm style:reset` | Check / remove style options on `/styleguide/compare` (see `docs/theming.md`) |
 
 ### Where things live
 

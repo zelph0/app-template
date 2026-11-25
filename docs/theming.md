@@ -15,8 +15,40 @@ beyond what tokens can express.
    tokens inside variants (`rounded-lg`, `h-control`, `border-ui`, `shadow-surface`), not raw values.
 4. Verify on **`/styleguide`** in light and dark, then run `pnpm test:e2e` (axe checks contrast there).
 
+`/new-app` doesn't guess one style: it generates several **candidates**, shows them side by side on
+`/styleguide/compare`, and applies only the one the user picks (see "Comparing styles" below).
+
 Nothing else should need to change. If a style needs a new token, add it to `theme.css`, map it
 in `src/app/globals.css` (`@theme inline`) and show it on `/styleguide`.
+
+## Comparing styles
+
+`/styleguide/compare` renders the app's real components once per candidate:
+- the Tasks list in every state;
+- the task form with a validation error;
+- a dialog;
+- buttons, inputs and badges;
+- the sign-in card.
+
+Each candidate sits in its own `[data-theme-preview="<id>"]` scope, so several render together
+without touching the real theme. The page is dev-only and 404s unless `STYLE_PREVIEW=1`.
+
+| File (`src/styles/candidates/`) | Holds |
+|---|---|
+| `index.ts` | the list: `{ id, name, summary }` (no imports: `style:check` reads it outside Next) |
+| `fonts.ts` | `next/font` loaders per candidate, exported as `candidateFonts[id]` classNames |
+| `candidates.css` | scoped tokens (`[data-theme-preview=a]`, `.dark [data-theme-preview=a]`) and variant previews on `data-slot`s |
+
+1. Write candidates: exact formats in `skills/new-app/references/styling.md` in the template.
+2. Run `STYLE_PREVIEW=1 pnpm dev --port 3200` and open `/styleguide/compare`. Use the theme switch
+   in the header for light and dark.
+3. Run `STYLE_BASE_URL=http://localhost:3200 pnpm style:check`. It runs axe on each candidate in
+   light and dark; nobody should see a failing one.
+4. Apply the chosen candidate to `theme.css`, `fonts.ts` and the `cva` variants, then run
+   `pnpm style:reset`. The folder's committed state is always empty, and a unit test fails CI
+   otherwise.
+
+The same flow restyles the template's own default look.
 
 ## Tokens
 
