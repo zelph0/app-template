@@ -112,9 +112,36 @@ Questionnaire (multiple choice where possible):
 
 1. App name / slug
 2. Include auth? If yes: which providers (email/OTP, Google, GitHub)
-3. Styling: a short description of the vibe, plus optional reference URLs/screenshots → Claude generates tokens (palette, fonts, radius, light/dark) and adjusts component variants
+3. Styling: a short description of the vibe, an optional colour palette (names or hex), plus optional reference URLs/screenshots → Claude generates several directions to choose from (see "Styling step" below)
 4. Optional features (toggles listed above)
 5. Custom domain (optional)
+
+### Styling step: pick from generated options
+
+Instead of one guess, Claude generates **3–4 distinct directions** and the user picks.
+
+- **Each direction is a complete style**, following the theme contract (`docs/theming.md`):
+  - tokens in `theme.css` (palette for light and dark, radius, border width, density, shadows, motion, heading type);
+  - fonts in `fonts.ts`;
+  - component variant changes (e.g. pill buttons, underline inputs).
+
+  Directions must differ in more than colour.
+- **Use the palette if one is given.** Directions may vary how it's applied (which colour is primary, accent, neutral tint), but don't replace it.
+- **Preview on real components.** Show a local preview page that renders the app's real UI with each direction side by side, or with a switcher, plus a light/dark toggle:
+  - the Tasks list with items in every state, the task form with a validation error, a dialog;
+  - buttons, inputs and badges, the sign-in card;
+  - the `/styleguide` components.
+
+  Candidates are scoped (e.g. `[data-theme-preview="b"]`) so they render together without touching the real theme.
+- **Contrast is checked before showing.** Run the axe contrast check on every direction, in light and dark. Fix or drop failing ones before the user sees them.
+- **The user chooses:**
+  - one direction;
+  - a mix ("A's colours with C's shapes");
+  - or another round with feedback.
+
+  Claude then writes only the chosen style into `theme.css`, `fonts.ts` and the variants, and removes the preview candidates.
+- **Run the normal checks after applying:** `/styleguide` in light and dark, and `pnpm test:e2e` (the axe checks).
+- **The same flow can restyle the template's own default look.**
 
 **Never ask for secrets.** The user logs into the CLIs once (`gh auth login`, `neonctl auth`, `vercel login`, `claude setup-token`). The provisioning script pulls keys from those CLIs and writes them straight into Vercel env vars, GitHub secrets and `.env.local`.
 
