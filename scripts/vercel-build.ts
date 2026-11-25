@@ -1,6 +1,8 @@
 /**
  * Vercel build command (vercel.json). Previews: migrate + seed the PR's own Neon branch
- * (injected by the Neon <> Vercel integration), so preview e2e has data and users.
+ * (injected by the Neon <> Vercel integration), so preview e2e has data and users. A preview whose
+ * DATABASE_URL is production's (integration branching switched off) fails the build BEFORE
+ * anything touches the database.
  * Production: never migrates here. .github/workflows/migrate-prod.yml already applied
  * migrations before triggering this deploy.
  *
@@ -11,7 +13,7 @@
  * NEON_PROJECT_ID (set by the integration); skipped when either is missing or auth is removed.
  */
 import { execFileSync } from "node:child_process";
-import { neonCli, neonJson, readNeonProject } from "./lib/neon";
+import { endpointOf, neonCli, neonJson, readNeonProject } from "./lib/neon";
 
 const run = (args: string[]) => execFileSync("pnpm", args, { stdio: "inherit" });
 const env = process.env.VERCEL_ENV;
@@ -29,6 +31,33 @@ export function deploymentOrigins(vars: Record<string, string | undefined>, prod
     return { branch: productionBranch, origins: https([vars.VERCEL_PROJECT_PRODUCTION_URL]) };
   }
   return null;
+}
+
+/** Throws unless a preview's database is a different Neon endpoint than production's. */
+export function assertPreviewDatabase(previewUrl: string | undefined, productionUrl: string) {
+  const preview = endpointOf(previewUrl);
+  if (!preview) throw new Error("Preview build: DATABASE_URL is missing or invalid.");
+  if (preview === endpointOf(productionUrl)) {
+    throw new Error(
+      "Preview build: DATABASE_URL points at the PRODUCTION database. Refusing to migrate, seed or build.\n" +
+        "Turn on database branching for previews: Vercel → Storage → the Neon database → Projects → " +
+        "this project → 'Create database branch for deployment' → Preview. Then redeploy.",
+    );
+  }
+}
+
+function guardPreviewDatabase() {
+  const projectId = process.env.NEON_PROJECT_ID;
+  if (!projectId || !process.env.NEON_API_KEY) {
+    throw new Error(
+      "Preview build: NEON_PROJECT_ID / NEON_API_KEY missing, can't verify the database isn't production.",
+    );
+  }
+  const production = readNeonProject().productionBranch.name;
+  assertPreviewDatabase(
+    process.env.DATABASE_URL,
+    neonCli(["connection-string", production, "--project-id", projectId]),
+  );
 }
 
 function trustDeploymentOrigins() {
@@ -51,6 +80,10 @@ function trustDeploymentOrigins() {
 
 const isMain = process.argv[1]?.endsWith("scripts/vercel-build.ts");
 if (isMain) {
+  if (process.env.VERCEL && !env) {
+    throw new Error("VERCEL_ENV is not set: enable 'Automatically expose System Environment Variables'.");
+  }
+  if (env === "preview") guardPreviewDatabase();
   run(["exec", "prisma", "generate"]);
   if (env === "preview") {
     console.info("Preview: applying migrations and seeding the preview branch…");

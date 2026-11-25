@@ -7,7 +7,7 @@ import { renderMcpJson, renderNeonProject } from "../../scripts/lib/provision/ne
 import { parseProvisionArgs, titleFromSlug } from "../../scripts/lib/provision/options";
 import { secretsStep } from "../../scripts/lib/provision/secrets";
 import { renderTemplateConfig } from "../../scripts/lib/template-config";
-import { deploymentOrigins } from "../../scripts/vercel-build";
+import { assertPreviewDatabase, deploymentOrigins } from "../../scripts/vercel-build";
 
 describe("parseProvisionArgs", () => {
   it("fills defaults from the slug", () => {
@@ -257,5 +257,20 @@ describe("deploymentOrigins (vercel-build)", () => {
       origins: ["https://app.com"],
     });
     expect(deploymentOrigins({}, "main")).toBeNull();
+  });
+});
+
+describe("assertPreviewDatabase (vercel-build)", () => {
+  const prod = "postgresql://u:p@ep-prod-123.us-east-1.aws.neon.tech/neondb";
+  it("refuses a preview that points at production, pooled or not", () => {
+    expect(() =>
+      assertPreviewDatabase("postgresql://u:p@ep-prod-123-pooler.us-east-1.aws.neon.tech/neondb", prod),
+    ).toThrow(/PRODUCTION/);
+    expect(() => assertPreviewDatabase(undefined, prod)).toThrow(/missing/);
+  });
+  it("accepts a preview branch", () => {
+    expect(() =>
+      assertPreviewDatabase("postgresql://u:p@ep-preview-9.us-east-1.aws.neon.tech/neondb", prod),
+    ).not.toThrow();
   });
 });
