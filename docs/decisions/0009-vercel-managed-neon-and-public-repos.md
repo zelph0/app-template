@@ -14,7 +14,14 @@ GitHub's free plans don't enforce rulesets or branch protection on private repos
 
 **Decision.**
 - Use the **Vercel-managed** integration:
-  `vercel integration add neon --name <slug> --meta region=… --meta auth=… -e production -e preview`.
+  `vercel integration add neon --name <slug> --meta region=… --meta auth=… --no-connect`, then a
+  `POST /v1/storage/stores/<store>/connections` with `deployments.actions: [{ slug: "Neon",
+  environments: ["preview"] }]`.
+  - That is the dashboard's "Create database branch for deployment: Preview". The CLI's connect
+    leaves it off, and then previews silently receive **production's** `DATABASE_URL`.
+  - The body shape was read back from a dashboard-made connection. It is undocumented, so
+    provisioning verifies it after connecting, and `vercel-build` refuses to run a preview against
+    production.
   - It injects `DATABASE_URL`, `DATABASE_URL_UNPOOLED` and `NEON_AUTH_BASE_URL` into production and
     into each preview, which gets its own `preview/<git-branch>` database.
   - It is never connected to `development`, because that would point local dev at production. Local
