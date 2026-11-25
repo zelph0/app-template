@@ -26,8 +26,8 @@ GitHub's free plans don't enforce rulesets or branch protection on private repos
     into each preview, which gets its own `preview/<git-branch>` database.
   - It is never connected to `development`, because that would point local dev at production. Local
     dev keeps using the `dev` branch (`pnpm db:env`).
-- Pin the Vercel CLI as a devDependency (`pnpm exec vercel`), like `neon`. The scripts and
-  `migrate-prod.yml` use that pinned version.
+- Pin the Vercel CLI as a devDependency (`pnpm exec vercel`), like `neon`. The provisioning
+  scripts use that pinned version.
 - New app repos default to **public** under the gh user, so `protect-main` is enforced for free.
   `--private` exists for paid plans.
 - CI credentials are least-privilege:
