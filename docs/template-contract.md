@@ -84,7 +84,9 @@ Restyling an app means editing exactly two files plus, optionally, component var
 - `src/components/ui/*`: `cva` variants, to change shape and feel beyond tokens.
 
 Details and rules: `docs/theming.md`. Check the result on `/styleguide` (light and dark);
-CI's axe check covers contrast on that page.
+CI's axe check covers contrast on that page. `/new-app` compares several candidates first on
+`/styleguide/compare` (dev only, `STYLE_PREVIEW=1`). The candidates live in
+`src/styles/candidates/`, which is empty in every commit.
 
 ## 4. Optional features (not in the base)
 
@@ -122,13 +124,16 @@ If a required check is renamed in `ci.yml`, update `REQUIRED_CHECKS` in
 
 `scripts/provision.ts` runs these steps in order. Each step checks real state first, so a re-run
 skips finished steps (`↷ already done`) and resumes after a failure. `pnpm provision --help` lists
-the options.
+the options. `--preflight` checks logins, the slug and ownership without changing anything.
+`--no-pr` stops before the commit: `/new-app` styles the app in between, then re-runs the same
+command.
 
 1. Create the GitHub repo from the template and clone it to `../<slug>`. Cancel the doomed CI run
    on the template's initial commit.
 2. Create the `chore/provision` branch, run `pnpm install`, and record the options in
    `provision.json`.
-3. Write the app identity to `template.config.ts`, then run `pnpm template:sync`.
+3. Write the app identity to `template.config.ts`, then run `pnpm template:sync`. Remove the
+   template-only files: `skills/` (the `/new-app` source) and `TEMPLATE_SPEC.md`.
 4. With `--no-auth`: run `pnpm auth:remove`. With `--theme-dir`: copy the theme files.
 5. Create the Vercel project, link the folder, and connect the repo. Turn on GitHub deployment
    events (`gitProviderOptions.createDeployments`), which `e2e-preview.yml` listens for. The

@@ -43,6 +43,7 @@ E2E logs in with seeded users (`src/modules/auth/testing/users.ts`); `pnpm auth:
 
 Tokens live only in `src/styles/theme.css`, fonts in `src/config/fonts.ts`. Components use tokens and
 `components/ui` variants, never hard-coded colours or sizes. Check `/styleguide` in light and dark. See `docs/theming.md`.
+Restyling: compare candidates on `/styleguide/compare` (`STYLE_PREVIEW=1`), `pnpm style:check`, then `pnpm style:reset`.
 
 ## Database safety
 
