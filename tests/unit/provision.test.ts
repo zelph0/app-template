@@ -3,10 +3,11 @@ import { describe, expect, it } from "vitest";
 import { type Cli, CliError, type RunOptions, redact, registerSecret } from "../../scripts/lib/cli";
 import { type Context, runSteps, type Step } from "../../scripts/lib/provision/context";
 import { REQUIRED_CHECKS } from "../../scripts/lib/provision/github";
-import { renderMcpJson, renderNeonProject, trustedDomains } from "../../scripts/lib/provision/neon";
+import { renderMcpJson, renderNeonProject } from "../../scripts/lib/provision/neon";
 import { parseProvisionArgs, titleFromSlug } from "../../scripts/lib/provision/options";
 import { secretsStep } from "../../scripts/lib/provision/secrets";
 import { renderTemplateConfig } from "../../scripts/lib/template-config";
+import { deploymentOrigins } from "../../scripts/vercel-build";
 
 describe("parseProvisionArgs", () => {
   it("fills defaults from the slug", () => {
@@ -87,10 +88,6 @@ describe("Neon files", () => {
   it("points the Neon MCP at the new project", () => {
     const out = renderMcpJson(readFileSync(".mcp.json", "utf8"), "cool-river-12345678");
     expect(out).toContain("mcp.neon.tech/mcp?projectId=cool-river-12345678");
-  });
-
-  it("trusts production and the team's preview URLs", () => {
-    expect(trustedDomains("my-app", "team-x")).toEqual(["https://my-app.vercel.app", "https://*-team-x.vercel.app"]);
   });
 });
 
@@ -229,5 +226,32 @@ describe("secretsStep", () => {
     for (const call of calls) {
       for (const value of secretValues) expect(call.args.join(" ")).not.toContain(value);
     }
+  });
+});
+
+describe("deploymentOrigins (vercel-build)", () => {
+  it("trusts a preview's deployment and branch URLs on its preview branch", () => {
+    expect(
+      deploymentOrigins(
+        {
+          VERCEL_ENV: "preview",
+          VERCEL_GIT_COMMIT_REF: "feat/x",
+          VERCEL_URL: "app-abc123-team.vercel.app",
+          VERCEL_BRANCH_URL: "app-git-feat-x-team.vercel.app",
+        },
+        "main",
+      ),
+    ).toEqual({
+      branch: "preview/feat/x",
+      origins: ["https://app-abc123-team.vercel.app", "https://app-git-feat-x-team.vercel.app"],
+    });
+  });
+
+  it("trusts the production domain on the production branch, and nothing outside Vercel", () => {
+    expect(deploymentOrigins({ VERCEL_ENV: "production", VERCEL_PROJECT_PRODUCTION_URL: "app.com" }, "main")).toEqual({
+      branch: "main",
+      origins: ["https://app.com"],
+    });
+    expect(deploymentOrigins({}, "main")).toBeNull();
   });
 });

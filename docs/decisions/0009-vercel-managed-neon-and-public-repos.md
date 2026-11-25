@@ -27,6 +27,17 @@ GitHub's free plans don't enforce rulesets or branch protection on private repos
   - a Neon API key scoped to the one project;
   - a Vercel token scoped to the one project;
   - the production DB URL as a secret of the `production` environment, which only `main` can use.
+- Neon Auth trusted domains are set **at build time**, not at provisioning. Neon Auth rejects
+  sign-ins whose `Origin` isn't trusted (`INVALID_ORIGIN`), and each preview branch has its own copy
+  of the list.
+  - Neon wildcards must be a whole leftmost label. So `https://*-<team>.vercel.app` is rejected, and
+    `https://*.vercel.app` would trust every Vercel site.
+  - Instead, `pnpm vercel-build` adds the deployment's exact URLs to its own branch:
+    `VERCEL_URL` + `VERCEL_BRANCH_URL` on `preview/<branch>`, `VERCEL_PROJECT_PRODUCTION_URL` on
+    production, which covers custom domains too.
+  - It uses a second project-scoped Neon key, stored as `NEON_API_KEY` in Vercel (production +
+    preview, sensitive). Localhost stays allowed on production because CI and local tests branch
+    from it.
 
 **Consequences.**
 - Neon plan and compute changes for an app happen in the Vercel dashboard. The project can't be
@@ -36,4 +47,7 @@ GitHub's free plans don't enforce rulesets or branch protection on private repos
   `neon-cleanup.yml` deletes them when the PR closes.
 - `CLAUDE_CODE_OAUTH_TOKEN` can't be fetched by any CLI. Each app still needs `/install-github-app`
   once.
+- Preview builds hold a Neon key that can change any branch of the app's project. Only people who
+  can push branches to the repo trigger those builds. Vercel doesn't expose env vars to fork PRs
+  without approval.
 - Deleting an app is `pnpm deprovision <slug>`, behind a typed confirmation.

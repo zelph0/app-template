@@ -12,7 +12,7 @@ import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { createCli, parseJson, succeeds } from "./lib/cli";
-import { ACTIONS_CREDENTIAL_NAME, type Context } from "./lib/provision/context";
+import { ACTIONS_CREDENTIAL_NAME, BUILDS_CREDENTIAL_NAME, type Context } from "./lib/provision/context";
 import { assertOurRepo, getRepo } from "./lib/provision/github";
 import { findNeonProject } from "./lib/provision/neon";
 import { SLUG } from "./lib/provision/options";
@@ -94,7 +94,7 @@ async function main() {
     const keys = parseJson<Key[]>(
       cli.neon(["api-keys", "list", "--org-id", neonProject.org_id, "--output", "json"]),
       "neon api-keys list",
-    ).filter((k) => k.name === tokenName);
+    ).filter((k) => k.name === tokenName || k.name === BUILDS_CREDENTIAL_NAME(slug));
     for (const key of keys) {
       actions.push({
         what: `Neon API key "${key.name}"`,

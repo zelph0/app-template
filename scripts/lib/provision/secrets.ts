@@ -3,10 +3,10 @@
  * when missing, read straight from the CLI that owns it and piped into `gh secret set` via stdin.
  * Nothing is printed and nothing is asked of the user.
  */
-import { ACTIONS_CREDENTIAL_NAME, type Context, type Step } from "./context";
+import { ACTIONS_CREDENTIAL_NAME, BUILDS_CREDENTIAL_NAME, type Context, type Step } from "./context";
 import { listSecrets, listVariables, setSecret, setVariable } from "./github";
 import { createNeonApiKey, productionDirectUrl } from "./neon";
-import { createVercelToken, ensureBypassSecret } from "./vercel";
+import { createVercelToken, ensureBypassSecret, envTargets } from "./vercel";
 
 function wantedVariables(ctx: Context): Record<string, string> {
   return {
@@ -53,5 +53,32 @@ export const secretsStep: Step = {
   isDone: (ctx) => missingSecrets(ctx).length === 0,
   run(ctx) {
     for (const spec of missingSecrets(ctx)) setSecret(ctx, spec.name, spec.value(ctx), spec.environment);
+  },
+};
+
+const BUILD_TARGETS = ["production", "preview"] as const;
+
+/**
+ * NEON_API_KEY on Vercel (production + preview, sensitive): a key scoped to this Neon project that
+ * `pnpm vercel-build` uses to trust each deployment's URL in its branch's Neon Auth.
+ */
+export const vercelBuildKeyStep: Step = {
+  id: "vercel-build-key",
+  title: "NEON_API_KEY on Vercel (builds trust their own URL in Neon Auth)",
+  skip: (ctx) => (ctx.opts.auth ? false : "no auth"),
+  isDone: (ctx) => {
+    const targets = envTargets(ctx).get("NEON_API_KEY");
+    return BUILD_TARGETS.every((t) => targets?.has(t));
+  },
+  run(ctx) {
+    const existing = envTargets(ctx).get("NEON_API_KEY");
+    const key = createNeonApiKey(ctx, BUILDS_CREDENTIAL_NAME(ctx.opts.slug));
+    for (const target of BUILD_TARGETS) {
+      if (existing?.has(target)) continue;
+      ctx.cli.vercel(["env", "add", "NEON_API_KEY", "-e", target, "--sensitive", "--yes"], {
+        cwd: ctx.appDir,
+        input: key,
+      });
+    }
   },
 };
