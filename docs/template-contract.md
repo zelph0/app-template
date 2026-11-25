@@ -102,7 +102,8 @@ steps, never shipped in the base. Where they go:
 | GitHub secret | `NEON_API_KEY` | provisioning: Neon key scoped to the project (CI branch per run) |
 | GitHub env secret (`production`) | `PROD_DATABASE_URL_UNPOOLED` | provisioning (production migrations; the environment only deploys from `main`) |
 | GitHub variables | `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` | provisioning (enables production deploy + preview e2e) |
-| GitHub secrets | `VERCEL_TOKEN` (scoped to the project), `VERCEL_AUTOMATION_BYPASS_SECRET` | provisioning |
+| GitHub env secret (`production`) | `VERCEL_DEPLOY_HOOK_URL` | provisioning: deploy hook for `main`, called by `migrate-prod.yml` after migrating |
+| GitHub secret | `VERCEL_AUTOMATION_BYPASS_SECRET` | provisioning (preview e2e gets past Deployment Protection) |
 | GitHub secret | `CLAUDE_CODE_OAUTH_TOKEN` | `/install-github-app` (manual: no CLI can fetch it) |
 | GitHub ruleset | `protect-main`: PR required; checks `checks`, `secret scan`, `db-e2e (auth)`, `db-e2e (noauth)` | provisioning |
 | Vercel env | `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `NEON_AUTH_BASE_URL` (production + per preview) | the Vercel-managed Neon integration |
@@ -140,5 +141,5 @@ the options.
 Secrets are piped between CLIs through stdin; they never appear in argv or output.
 
 `pnpm deprovision <slug>` undoes it after a typed confirmation: the Neon resource, the Vercel
-project, the scoped tokens and keys, and the GitHub repo. Why the Vercel-managed integration:
+project, the scoped Neon keys, and the GitHub repo. Why the Vercel-managed integration:
 `docs/decisions/0009-vercel-managed-neon-and-public-repos.md`.

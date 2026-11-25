@@ -111,18 +111,6 @@ async function main() {
     });
   }
 
-  type Token = { id: string; name: string };
-  const tokens = parseJson<{ tokens: Token[] }>(
-    cli.vercel(["tokens", "list", "--json"], { cwd: TEMPLATE_ROOT }),
-    "vercel tokens list",
-  ).tokens.filter((t) => t.name === tokenName);
-  for (const token of tokens) {
-    actions.push({
-      what: `Vercel token "${token.name}"`,
-      run: () => cli.vercel(["tokens", "revoke", token.id], { cwd: TEMPLATE_ROOT }),
-    });
-  }
-
   if (repo) {
     actions.push({
       what: `GitHub repo ${ctx.repo} (code, issues, PRs, Actions history)`,

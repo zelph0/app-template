@@ -54,23 +54,22 @@ jobs:
       ran: ${{ steps.guard.outputs.run }}
 
   deploy:
-    name: deploy & promote production
+    name: deploy production
     needs: migrate
     if: vars.VERCEL_PROJECT_ID != ''
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 5
     environment: production
     steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
-        with:
-          node-version-file: .nvmrc
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - name: Deploy to production (builds on Vercel, promotes on success)
+      # The hook builds `main` on Vercel as a production deployment and promotes it when the build
+      # succeeds. Set by `pnpm provision`; Git-triggered production deploys are off (vercel.json).
+      - name: Trigger the production deploy hook
         env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
-        run: pnpm exec vercel deploy --prod --yes --token "$VERCEL_TOKEN"
+          HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$HOOK" ]; then
+            echo "VERCEL_DEPLOY_HOOK_URL is not set: run pnpm provision for this app."
+            exit 1
+          fi
+          curl -fsS -X POST "$HOOK" > /dev/null
+          echo "Production deploy queued on Vercel."

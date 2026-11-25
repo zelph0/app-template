@@ -25,7 +25,9 @@ GitHub's free plans don't enforce rulesets or branch protection on private repos
   `--private` exists for paid plans.
 - CI credentials are least-privilege:
   - a Neon API key scoped to the one project;
-  - a Vercel token scoped to the one project;
+  - no Vercel token: production deploys go through a deploy hook for `main`
+    (`VERCEL_DEPLOY_HOOK_URL`, a `production` environment secret). CLI sessions from "Sign in with
+    Vercel" can't create tokens, and a hook can only build `main`;
   - the production DB URL as a secret of the `production` environment, which only `main` can use.
 - Neon Auth trusted domains are set **at build time**, not at provisioning. Neon Auth rejects
   sign-ins whose `Origin` isn't trusted (`INVALID_ORIGIN`), and each preview branch has its own copy

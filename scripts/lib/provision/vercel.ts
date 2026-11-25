@@ -135,17 +135,26 @@ export function ensureBypassSecret(ctx: Context): string {
   return secret;
 }
 
-/** A Vercel token scoped to this project, for migrate-prod.yml's production deploy. */
-export function createVercelToken(ctx: Context, name: string): string {
-  const out = parseJson<Record<string, unknown>>(
-    ctx.cli.vercel(["tokens", "create", name, "--project", ctx.facts.vercelProjectId ?? ctx.opts.slug, "--json"], {
-      cwd: ctx.appDir,
-    }),
-    "vercel tokens create",
+const DEPLOY_HOOK_NAME = "production (migrate-prod.yml)";
+const HOOK_URL = /https:\/\/api\.vercel\.com\/v1\/integrations\/deploy\/[\w/-]+/;
+
+/**
+ * A deploy hook that builds `main` as production. migrate-prod.yml calls it after migrating, instead
+ * of a Vercel token: CLI sessions from "Sign in with Vercel" can't create tokens, and a hook can only
+ * trigger a build of `main` (Git deploys of `main` are off in vercel.json).
+ */
+export function ensureDeployHook(ctx: Context): string {
+  type Hooks = { hooks?: { name?: string; url?: string }[] };
+  const listed = parseJson<Hooks>(
+    ctx.cli.vercel(["deploy-hooks", "list", "--format", "json"], { cwd: ctx.appDir }),
+    "vercel deploy-hooks list",
   );
-  const token = [out.token, out.bearerToken, (out.token as { bearerToken?: string } | undefined)?.bearerToken].find(
-    (v): v is string => typeof v === "string",
-  );
-  if (!token) throw new Error(`\`vercel tokens create\` returned no token (fields: ${Object.keys(out).join(", ")}).`);
-  return registerSecret(token);
+  const existing = listed.hooks?.find((h) => h.name === DEPLOY_HOOK_NAME)?.url;
+  if (existing) return registerSecret(existing);
+  const out = ctx.cli.vercel(["deploy-hooks", "create", DEPLOY_HOOK_NAME, "--git-branch", "main", "--format", "json"], {
+    cwd: ctx.appDir,
+  });
+  const url = out.match(HOOK_URL)?.[0];
+  if (!url) throw new Error("`vercel deploy-hooks create` returned no hook URL.");
+  return registerSecret(url);
 }

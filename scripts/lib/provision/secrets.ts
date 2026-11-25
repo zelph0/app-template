@@ -6,7 +6,7 @@
 import { ACTIONS_CREDENTIAL_NAME, BUILDS_CREDENTIAL_NAME, type Context, type Step } from "./context";
 import { listSecrets, listVariables, setSecret, setVariable } from "./github";
 import { createNeonApiKey, productionDirectUrl } from "./neon";
-import { createVercelToken, ensureBypassSecret, envTargets } from "./vercel";
+import { ensureBypassSecret, ensureDeployHook, envTargets } from "./vercel";
 
 function wantedVariables(ctx: Context): Record<string, string> {
   return {
@@ -36,7 +36,7 @@ type SecretSpec = { name: string; environment?: string; value(ctx: Context): str
 
 export const SECRETS: SecretSpec[] = [
   { name: "NEON_API_KEY", value: (ctx) => createNeonApiKey(ctx, ACTIONS_CREDENTIAL_NAME(ctx.opts.slug)) },
-  { name: "VERCEL_TOKEN", value: (ctx) => createVercelToken(ctx, ACTIONS_CREDENTIAL_NAME(ctx.opts.slug)) },
+  { name: "VERCEL_DEPLOY_HOOK_URL", environment: "production", value: ensureDeployHook },
   { name: "VERCEL_AUTOMATION_BYPASS_SECRET", value: ensureBypassSecret },
   { name: "PROD_DATABASE_URL_UNPOOLED", environment: "production", value: productionDirectUrl },
 ];
@@ -49,7 +49,7 @@ function missingSecrets(ctx: Context): SecretSpec[] {
 
 export const secretsStep: Step = {
   id: "github-secrets",
-  title: "GitHub secrets (Neon API key, Vercel token, bypass secret, production DB URL)",
+  title: "GitHub secrets (Neon API key, deploy hook, bypass secret, production DB URL)",
   isDone: (ctx) => missingSecrets(ctx).length === 0,
   run(ctx) {
     for (const spec of missingSecrets(ctx)) setSecret(ctx, spec.name, spec.value(ctx), spec.environment);
