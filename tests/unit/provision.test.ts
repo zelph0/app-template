@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { type Cli, CliError, type RunOptions, redact, registerSecret } from "../../scripts/lib/cli";
 import { type Context, runSteps, type Step } from "../../scripts/lib/provision/context";
 import { REQUIRED_CHECKS } from "../../scripts/lib/provision/github";
-import { renderMcpJson, renderNeonProject } from "../../scripts/lib/provision/neon";
+import { connectionBody, isWantedConnection, renderMcpJson, renderNeonProject } from "../../scripts/lib/provision/neon";
 import { parseProvisionArgs, titleFromSlug } from "../../scripts/lib/provision/options";
 import { secretsStep } from "../../scripts/lib/provision/secrets";
 import { renderTemplateConfig } from "../../scripts/lib/template-config";
@@ -272,5 +272,15 @@ describe("assertPreviewDatabase (vercel-build)", () => {
     expect(() =>
       assertPreviewDatabase("postgresql://u:p@ep-preview-9.us-east-1.aws.neon.tech/neondb", prod),
     ).not.toThrow();
+  });
+});
+
+describe("Neon connection", () => {
+  it("wants production + preview with a database branch per preview, never development", () => {
+    const body = connectionBody("prj_1");
+    expect(isWantedConnection(body)).toBe(true);
+    expect(isWantedConnection({ projectId: "prj_1", envVarEnvironments: ["production", "preview"] })).toBe(false);
+    expect(isWantedConnection({ ...body, envVarEnvironments: ["production", "preview", "development"] })).toBe(false);
+    expect(isWantedConnection(undefined)).toBe(false);
   });
 });

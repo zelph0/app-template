@@ -1,20 +1,21 @@
 /**
  * Neon through the Vercel-managed integration: `vercel integration add neon` creates the Neon project
- * (in the "Vercel: <team>" Neon org) and injects DATABASE_URL, DATABASE_URL_UNPOOLED and
- * NEON_AUTH_BASE_URL into production and per-preview deployments. See docs/decisions/0009.
+ * (in the "Vercel: <team>" Neon org). Connecting it to the project injects DATABASE_URL,
+ * DATABASE_URL_UNPOOLED and NEON_AUTH_BASE_URL into production and into each preview, which gets
+ * its own Neon branch. See docs/decisions/0009.
  */
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { CliError, parseJson, registerSecret } from "../cli";
 import { type Context, type Step, waitFor } from "./context";
-import { envTargets } from "./vercel";
+import { vercelApi } from "./vercel";
 
 const NEON_PROJECT_ID = /\b[a-z]+-[a-z]+-\d{8}\b/;
 
 /** The integration resource for this app, or null. Resource names equal the app slug. */
 function inspectResource(ctx: Context): string | null {
   try {
-    return ctx.cli.vercel(["integration-resource", "inspect", ctx.opts.slug, "--json", "--scope", ctx.opts.scope], {
+    return ctx.cli.vercel(["integration", "resource", "inspect", ctx.opts.slug, "--json", "--scope", ctx.opts.scope], {
       cwd: ctx.appDir,
     });
   } catch (error) {
@@ -43,21 +44,28 @@ export function findNeonProject(ctx: Context): NeonProject | null {
   return null;
 }
 
+/** Vercel store id (store_…) of the app's Neon resource. */
+function storeId(ctx: Context): string {
+  const raw = inspectResource(ctx);
+  const id = raw ? (JSON.parse(raw) as { resource?: { id?: string } }).resource?.id : undefined;
+  if (!id) throw new Error(`Can't find the Vercel resource "${ctx.opts.slug}".`);
+  return id;
+}
+
 export const neonResourceStep: Step = {
   id: "neon-resource",
-  title: "Neon database via Vercel (production + previews)",
+  title: "Neon database via the Vercel-managed integration",
   isDone(ctx) {
     if (inspectResource(ctx) === null) return false;
     const project = findNeonProject(ctx);
     if (!project) return false;
     ctx.facts.neonProjectId = project.id;
     ctx.facts.neonOrgId = project.org_id;
-    return envTargets(ctx).get("DATABASE_URL")?.has("production") === true;
+    return true;
   },
   run(ctx) {
-    // Never `development`: that would point local dev at production. Local dev uses the `dev` branch (db:env).
-    const environments = ["-e", "production", "-e", "preview"];
     if (inspectResource(ctx) === null) {
+      // --no-connect: the CLI's connect can't turn on a branch per preview; neonConnectionStep does.
       ctx.cli.vercel(
         [
           "integration",
@@ -71,32 +79,74 @@ export const neonResourceStep: Step = {
           `auth=${ctx.opts.auth}`,
           "--billing-plan",
           "free_v3",
-          ...environments,
-          "--no-env-pull",
+          "--no-connect",
           "--scope",
           ctx.opts.scope,
         ],
         { cwd: ctx.appDir, inherit: true },
-      );
-    } else {
-      ctx.cli.vercel(
-        [
-          "integration-resource",
-          "connect",
-          ctx.opts.slug,
-          ctx.opts.slug,
-          ...environments,
-          "--yes",
-          "--scope",
-          ctx.opts.scope,
-        ],
-        { cwd: ctx.appDir },
       );
     }
     const project = findNeonProject(ctx);
     if (!project) throw new Error(`Created the Vercel resource "${ctx.opts.slug}" but can't find its Neon project.`);
     ctx.facts.neonProjectId = project.id;
     ctx.facts.neonOrgId = project.org_id;
+  },
+};
+
+type Connection = {
+  projectId: string;
+  envVarEnvironments?: string[];
+  deployments?: { required?: boolean; actions?: { slug: string; environments: string[] }[] };
+};
+
+/**
+ * The connection we want. Never `development` (that would point local dev at production; local dev
+ * uses the `dev` branch via db:env). `deployments` = the dashboard's "Create database branch for
+ * deployment: Preview": each preview gets its own `preview/<git-branch>` Neon branch.
+ */
+export function connectionBody(projectId: string) {
+  return {
+    projectId,
+    envVarEnvironments: ["production", "preview"],
+    makeEnvVarsSensitive: true,
+    deployments: { required: true, actions: [{ slug: "Neon", environments: ["preview"] }] },
+  };
+}
+
+export function isWantedConnection(connection: Connection | undefined): boolean {
+  if (!connection) return false;
+  const envs = new Set(connection.envVarEnvironments ?? []);
+  const branchesPreviews = (connection.deployments?.actions ?? []).some((a) => a.environments.includes("preview"));
+  return envs.has("production") && envs.has("preview") && !envs.has("development") && branchesPreviews;
+}
+
+function currentConnection(ctx: Context, store: string): Connection | undefined {
+  const out = vercelApi(ctx, `/v1/storage/stores/${store}/connections`);
+  return parseJson<{ connections: Connection[] }>(out, "store connections").connections.find(
+    (c) => c.projectId === ctx.facts.vercelProjectId,
+  );
+}
+
+export const neonConnectionStep: Step = {
+  id: "neon-connection",
+  title: "Connect Neon to the project (production + a database branch per preview)",
+  isDone: (ctx) => isWantedConnection(currentConnection(ctx, storeId(ctx))),
+  run(ctx) {
+    const store = storeId(ctx);
+    if (currentConnection(ctx, store)) {
+      // Connected some other way (e.g. by the CLI, without preview branching): connect again properly.
+      ctx.cli.vercel(
+        ["integration", "resource", "disconnect", ctx.opts.slug, ctx.opts.slug, "--yes", "--scope", ctx.opts.scope],
+        { cwd: ctx.appDir },
+      );
+    }
+    vercelApi(ctx, `/v1/storage/stores/${store}/connections`, {
+      method: "POST",
+      body: connectionBody(ctx.facts.vercelProjectId ?? ""),
+    });
+    if (!isWantedConnection(currentConnection(ctx, store))) {
+      throw new Error("Connected the Neon database, but preview branching didn't stick. Check Vercel → Storage.");
+    }
   },
 };
 

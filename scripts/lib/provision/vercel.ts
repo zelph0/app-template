@@ -9,6 +9,7 @@ type VercelProject = {
   name: string;
   accountId: string;
   link?: { type?: string; org?: string; repo?: string };
+  gitProviderOptions?: { createDeployments?: string };
   protectionBypass?: Record<string, { scope?: string }>;
 };
 
@@ -77,6 +78,22 @@ export const vercelGitStep: Step = {
           '(https://github.com/apps/vercel/installations/new, ideally "All repositories"), then re-run.',
       );
     }
+  },
+};
+
+/**
+ * Project settings `vercel project add` leaves off: GitHub deployment events, which
+ * e2e-preview.yml listens for (`deployment_status`). The framework is pinned in vercel.json.
+ */
+export const vercelSettingsStep: Step = {
+  id: "vercel-settings",
+  title: "Vercel project settings (GitHub deployment events)",
+  isDone: (ctx) => getVercelProject(ctx)?.gitProviderOptions?.createDeployments === "enabled",
+  run(ctx) {
+    vercelApi(ctx, `/v9/projects/${ctx.opts.slug}`, {
+      method: "PATCH",
+      body: { gitProviderOptions: { createDeployments: "enabled" } },
+    });
   },
 };
 
