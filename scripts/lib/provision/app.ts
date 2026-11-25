@@ -216,6 +216,7 @@ export function prBody(ctx: Context): string {
     "## What was set up",
     `- Neon project \`${f.neonProjectId}\` (via the Vercel-managed integration), production branch \`${f.productionBranch?.name}\`, \`dev\` branch for local work`,
     `- Vercel project \`${ctx.opts.slug}\` in \`${ctx.opts.scope}\`, connected to this repo; previews get a \`preview/<branch>\` database`,
+    "- Vercel: a first production build of `main`, so this PR deploys as a preview. That build fails on the pending migrations; merging this PR migrates production and deploys it (docs/decisions/0011)",
     `- Auth: ${ctx.opts.auth ? `email codes${ctx.opts.providers.length ? ` + ${ctx.opts.providers.join(", ")}` : ""}` : "removed (`pnpm auth:remove`)"}`,
     `- Theme: ${ctx.opts.themeDir ? "applied from `/new-app`" : "template default"}`,
     "- GitHub: Actions secrets/variables, `production` environment, `protect-main` ruleset",

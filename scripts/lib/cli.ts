@@ -1,5 +1,5 @@
 /**
- * One way to call the external CLIs (gh, neon, vercel, pnpm, git) from scripts.
+ * One way to call the external CLIs (gh, neon, vercel, pnpm, git, curl) from scripts.
  * - Secrets travel through stdin (`input`), never argv, so they don't show up in `ps` or logs.
  * - Errors are redacted: Postgres passwords and every value passed to `registerSecret()` become `***`.
  * - Output is returned, not printed. `inherit: true` streams output to stderr instead (long builds),
@@ -72,6 +72,7 @@ export type Cli = {
   vercel(args: string[], options?: RunOptions): string;
   pnpm(args: string[], options?: RunOptions): string;
   git(args: string[], options?: RunOptions): string;
+  curl(args: string[], options?: RunOptions): string;
 };
 
 /**
@@ -86,6 +87,7 @@ export function createCli(toolsRoot: string, runner: Run = run): Cli {
     vercel: (args, options) => runner(bin("vercel"), [...args, "--non-interactive", "--no-color"], options),
     pnpm: (args, options) => runner("pnpm", args, options),
     git: (args, options) => runner("git", args, options),
+    curl: (args, options) => runner("curl", args, options),
   };
 }
 
