@@ -26,6 +26,7 @@ describe("parseProvisionArgs", () => {
       region: "iad1",
       pr: true,
       verify: true,
+      preflight: false,
     });
   });
 

@@ -61,6 +61,7 @@ async function main() {
       pr: false,
       verify: false,
       json: false,
+      preflight: false,
     },
     cli,
     repo: `${owner}/${slug}`,

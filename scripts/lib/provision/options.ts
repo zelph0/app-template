@@ -30,6 +30,8 @@ export type ProvisionOptions = {
   pr: boolean;
   verify: boolean;
   json: boolean;
+  /** Check logins, slug and ownership, then stop without changing anything. */
+  preflight: boolean;
 };
 
 export const USAGE = `Usage: pnpm provision <slug> [options]
@@ -47,7 +49,8 @@ export const USAGE = `Usage: pnpm provision <slug> [options]
   --template <owner/repo>  Template repo (default: this checkout's GitHub repo)
   --no-pr                  Stop before committing and opening the PR
   --no-verify              Skip typecheck/lint/test/build in the new app
-  --json                   Print a JSON summary on stdout (progress goes to stderr)`;
+  --json                   Print a JSON summary on stdout (progress goes to stderr)
+  --preflight              Only check logins, the slug and ownership; change nothing`;
 
 export function titleFromSlug(slug: string): string {
   return slug
@@ -76,6 +79,7 @@ export function parseProvisionArgs(argv: string[], cwd = process.cwd()): Provisi
       pr: { type: "boolean", default: true },
       verify: { type: "boolean", default: true },
       json: { type: "boolean", default: false },
+      preflight: { type: "boolean", default: false },
     },
   });
 
@@ -122,5 +126,6 @@ export function parseProvisionArgs(argv: string[], cwd = process.cwd()): Provisi
     pr: values.pr,
     verify: values.verify,
     json: values.json,
+    preflight: values.preflight,
   };
 }

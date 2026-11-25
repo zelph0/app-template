@@ -19,6 +19,7 @@ import {
   optionsStep,
   pullRequestStep,
   removeAuthStep,
+  templateOnlyStep,
   themeStep,
   verifyStep,
 } from "./lib/provision/app";
@@ -44,6 +45,7 @@ export const STEPS: Step[] = [
   installStep,
   optionsStep,
   identityStep,
+  templateOnlyStep,
   removeAuthStep,
   themeStep,
   vercelProjectStep,
@@ -134,6 +136,11 @@ function main() {
     return;
   }
   const ctx = preflight(argv);
+  if (ctx.opts.preflight) {
+    log.info(`Preflight OK: logged in to GitHub, Neon and Vercel (${ctx.opts.scope}); ${ctx.repo} is free or ours.`);
+    if (ctx.opts.json) console.info(JSON.stringify({ ok: true, repo: ctx.repo, scope: ctx.opts.scope }));
+    return;
+  }
   log.info(`Provisioning ${ctx.repo} → ${ctx.appDir} (Vercel team ${ctx.opts.scope}, Neon ${ctx.opts.region})\n`);
   const outcomes = runSteps(STEPS, ctx);
   const result = summary(ctx);
