@@ -34,6 +34,8 @@ provisioning (not secret):
   db scripts and the `neon-guard` hook.
 - `.mcp.json`: the Neon MCP URL's `projectId=`.
 - `.neon` (gitignored): local Neon CLI context, pinned to the `dev` branch.
+- `provision.json`: the options the app was provisioned with (owner, visibility, auth, providers,
+  region, Vercel team). Re-running `pnpm provision` with different ones is refused.
 
 ## 2. Removable auth module
 
@@ -124,7 +126,8 @@ the options.
 
 1. Create the GitHub repo from the template and clone it to `../<slug>`. Cancel the doomed CI run
    on the template's initial commit.
-2. Create the `chore/provision` branch and run `pnpm install`.
+2. Create the `chore/provision` branch, run `pnpm install`, and record the options in
+   `provision.json`.
 3. Write the app identity to `template.config.ts`, then run `pnpm template:sync`.
 4. With `--no-auth`: run `pnpm auth:remove`. With `--theme-dir`: copy the theme files.
 5. Create the Vercel project, link the folder, and connect the repo. Turn on GitHub deployment
@@ -136,18 +139,35 @@ the options.
 7. Set up Neon Auth on the production branch: enabled, providers, localhost. This runs before any
    other branch exists, because branches copy their parent's auth config. Deployed URLs are
    trusted later, by each build.
-8. Run `pnpm db:env`: creates the `dev` branch, writes `.env.local`, migrates and seeds.
+8. Run `pnpm db:env`: creates the `dev` branch, writes `.env.local`, migrates and seeds. The step
+   only counts as done once `prisma migrate status` is clean on `dev`.
 9. Set the Vercel `NEON_AUTH_COOKIE_SECRET` and `NEON_API_KEY`. Create the GitHub `production`
    environment, variables, secrets (including the production deploy hook), repo settings and
    ruleset (§5).
 10. Run `typecheck`, `lint`, `test` and `build` in the new app.
 11. Commit, push, and open the first PR.
 
-**Safety net:** `pnpm vercel-build` fails a preview whose `DATABASE_URL` is production's (which
-happens if preview branching is ever switched off) before migrating or seeding anything.
+**Ownership:** a same-named GitHub repo, Vercel project or Neon resource is adopted (provision) or
+deleted (deprovision) only if it's provably this app's:
+- the repo was generated from this template;
+- the Vercel project is connected to `owner/slug`, or is unlinked while the repo or the local
+  `.vercel` link vouches for it;
+- the Neon resource is connected to no other project.
+
+Anything else is refused. An existing Neon connection without preview branching is never
+disconnected automatically, because that would pull `DATABASE_URL` from a live production: the
+script explains the dashboard fix instead.
+
+**Safety nets in `pnpm vercel-build`:**
+- A preview fails the build if its `DATABASE_URL` is on a production endpoint (which happens if
+  preview branching is ever switched off), before migrating or seeding anything. It compares
+  endpoint ids from the API; no production credentials are involved.
+- A production build fails while any migration is pending: the deploy hook builds the head of
+  `main`, which can be newer than what `migrate-prod.yml` migrated.
 
 Secrets are piped between CLIs through stdin; they never appear in argv or output.
 
-`pnpm deprovision <slug>` undoes it after a typed confirmation: the Neon resource, the Vercel
-project, the scoped Neon keys, and the GitHub repo. Why the Vercel-managed integration:
+`pnpm deprovision <slug>` undoes it after a typed confirmation, in this order: the scoped Neon
+keys, the Neon resource, the Vercel project, and the GitHub repo. It applies the same ownership
+rules. Why the Vercel-managed integration:
 `docs/decisions/0009-vercel-managed-neon-and-public-repos.md`.

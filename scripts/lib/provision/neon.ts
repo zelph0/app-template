@@ -8,46 +8,58 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { CliError, parseJson, registerSecret } from "../cli";
 import { type Context, type Step, waitFor } from "./context";
-import { vercelApi } from "./vercel";
+import { cwdFor, vercelApi } from "./vercel";
 
-const NEON_PROJECT_ID = /\b[a-z]+-[a-z]+-\d{8}\b/;
+export type Resource = { id: string; name: string; projects: { id: string; name?: string }[] };
 
-/** The integration resource for this app, or null. Resource names equal the app slug. */
-function inspectResource(ctx: Context): string | null {
+/** The app's Vercel integration resource (named after the slug), or null. */
+export function getResource(ctx: Context): Resource | null {
+  let raw: string;
   try {
-    return ctx.cli.vercel(["integration", "resource", "inspect", ctx.opts.slug, "--json", "--scope", ctx.opts.scope], {
-      cwd: ctx.appDir,
+    raw = ctx.cli.vercel(["integration", "resource", "inspect", ctx.opts.slug, "--json", "--scope", ctx.opts.scope], {
+      cwd: cwdFor(ctx),
     });
   } catch (error) {
     if (error instanceof CliError) return null;
     throw error;
   }
+  const resource = parseJson<{ resource?: Resource }>(raw, "vercel integration resource inspect").resource;
+  return resource ? { ...resource, projects: resource.projects ?? [] } : null;
 }
 
-type NeonOrg = { id: string; name: string };
+/**
+ * A same-named resource is ours only if every project it's connected to is ours. Otherwise it may be
+ * another app's live database: refuse rather than adopt (or delete) it.
+ */
+export function assertResourceIsOurs(resource: Resource, ourProjectId: string | undefined) {
+  const foreign = resource.projects.filter((p) => p.id !== ourProjectId);
+  if (foreign.length > 0) {
+    throw new Error(
+      `The Vercel resource "${resource.name}" is connected to other project(s): ${foreign
+        .map((p) => p.name ?? p.id)
+        .join(", ")}. It isn't this app's database; refusing to touch it.`,
+    );
+  }
+}
+
 type NeonProject = { id: string; name: string; org_id?: string };
 
-/** Finds the Neon project behind the resource: its id from `ir inspect`, else by name in the Vercel org(s). */
+/** The Neon project behind the resource, by the store's `externalResourceId` (never by name). */
 export function findNeonProject(ctx: Context): NeonProject | null {
-  const inspected = inspectResource(ctx)?.match(NEON_PROJECT_ID)?.[0];
-  const orgs = parseJson<NeonOrg[]>(ctx.cli.neon(["orgs", "list", "--output", "json"]), "neon orgs list").filter((o) =>
-    o.name.startsWith("Vercel:"),
+  const resource = getResource(ctx);
+  if (!resource) return null;
+  const raw = parseJson<{ store?: { externalResourceId?: string }; externalResourceId?: string }>(
+    vercelApi(ctx, `/storage/stores/${resource.id}`),
+    "vercel api /storage/stores",
   );
-  for (const org of orgs) {
-    const projects = parseJson<NeonProject[]>(
-      ctx.cli.neon(["projects", "list", "--org-id", org.id, "--output", "json"]),
-      "neon projects list",
-    );
-    const match = projects.find((p) => (inspected ? p.id === inspected : p.name === ctx.opts.slug));
-    if (match) return { ...match, org_id: org.id };
-  }
-  return null;
+  const id = (raw.store ?? raw).externalResourceId;
+  if (!id) throw new Error(`The Vercel resource "${resource.name}" has no Neon project id (externalResourceId).`);
+  return parseJson<NeonProject>(ctx.cli.neon(["projects", "get", id, "--output", "json"]), "neon projects get");
 }
 
 /** Vercel store id (store_…) of the app's Neon resource. */
 function storeId(ctx: Context): string {
-  const raw = inspectResource(ctx);
-  const id = raw ? (JSON.parse(raw) as { resource?: { id?: string } }).resource?.id : undefined;
+  const id = getResource(ctx)?.id;
   if (!id) throw new Error(`Can't find the Vercel resource "${ctx.opts.slug}".`);
   return id;
 }
@@ -56,7 +68,9 @@ export const neonResourceStep: Step = {
   id: "neon-resource",
   title: "Neon database via the Vercel-managed integration",
   isDone(ctx) {
-    if (inspectResource(ctx) === null) return false;
+    const resource = getResource(ctx);
+    if (resource === null) return false;
+    assertResourceIsOurs(resource, ctx.facts.vercelProjectId);
     const project = findNeonProject(ctx);
     if (!project) return false;
     ctx.facts.neonProjectId = project.id;
@@ -64,7 +78,7 @@ export const neonResourceStep: Step = {
     return true;
   },
   run(ctx) {
-    if (inspectResource(ctx) === null) {
+    if (getResource(ctx) === null) {
       // --no-connect: the CLI's connect can't turn on a branch per preview; neonConnectionStep does.
       ctx.cli.vercel(
         [
@@ -134,10 +148,12 @@ export const neonConnectionStep: Step = {
   run(ctx) {
     const store = storeId(ctx);
     if (currentConnection(ctx, store)) {
-      // Connected some other way (e.g. by the CLI, without preview branching): connect again properly.
-      ctx.cli.vercel(
-        ["integration", "resource", "disconnect", ctx.opts.slug, ctx.opts.slug, "--yes", "--scope", ctx.opts.scope],
-        { cwd: ctx.appDir },
+      // Never disconnect automatically: on a live app that would pull DATABASE_URL from production.
+      throw new Error(
+        "The Neon database is connected without a database branch per preview (previews would get " +
+          "production's DATABASE_URL). Fix it in Vercel → Storage → the database → Projects: disconnect " +
+          "this project, then Connect Project with Production + Preview and 'Create database branch for " +
+          "deployment: Preview'. Then re-run.",
       );
     }
     vercelApi(ctx, `/v1/storage/stores/${store}/connections`, {
@@ -270,9 +286,31 @@ export const neonAuthStep: Step = {
   },
 };
 
-/** A Neon API key that can only touch this project, for CI's branch-per-run. */
-export function createNeonApiKey(ctx: Context, name: string): string {
-  const out = parseJson<{ key?: string }>(
+type ApiKey = { id: number | string; name: string };
+
+function orgId(ctx: Context): string {
+  if (!ctx.facts.neonOrgId) throw new Error("Neon org id not recorded; an earlier step didn't run.");
+  return ctx.facts.neonOrgId;
+}
+
+/** Revokes every org key with this name (project-scoped keys are org keys). Returns how many. */
+export function revokeNeonApiKeys(ctx: Context, name: string): number {
+  const keys = parseJson<ApiKey[]>(
+    ctx.cli.neon(["api-keys", "list", "--org-id", orgId(ctx), "--output", "json"]),
+    "neon api-keys list",
+  ).filter((k) => k.name === name);
+  for (const key of keys) ctx.cli.neon(["api-keys", "revoke", String(key.id), "--org-id", orgId(ctx)]);
+  return keys.length;
+}
+
+/**
+ * Mints a Neon API key that can only touch this project and hands it to `use`. Exactly one live key
+ * per name: earlier keys with the same name are revoked first, and the new key is revoked if `use`
+ * fails, so interrupted runs never leave orphan keys behind.
+ */
+export function withFreshNeonApiKey(ctx: Context, name: string, use: (key: string) => void) {
+  revokeNeonApiKeys(ctx, name);
+  const out = parseJson<{ id?: number | string; key?: string }>(
     ctx.cli.neon([
       "api-keys",
       "create",
@@ -285,8 +323,13 @@ export function createNeonApiKey(ctx: Context, name: string): string {
     ]),
     "neon api-keys create",
   );
-  if (!out.key) throw new Error("`neon api-keys create` returned no key.");
-  return registerSecret(out.key);
+  if (!out.key || out.id === undefined) throw new Error("`neon api-keys create` returned no key.");
+  try {
+    use(registerSecret(out.key));
+  } catch (error) {
+    ctx.cli.neon(["api-keys", "revoke", String(out.id), "--org-id", orgId(ctx)]);
+    throw error;
+  }
 }
 
 /** Direct (unpooled) production URL, for migrate-prod.yml. */

@@ -98,6 +98,7 @@ production database and deploys the site. Useful options (`pnpm provision --help
 | `--region fra1` | Database region (default `iad1`, US East) |
 
 If it stops halfway, fix what it says and run the **same command** again: it skips what's done.
+(Changing options like `--no-auth` on a re-run is refused; the app remembers them in `provision.json`.)
 Afterwards, open the app in Claude Code and run `/install-github-app` once (for `@claude` in PRs).
 
 To delete an app completely (repo, Vercel project, database): `pnpm deprovision my-app`. It shows

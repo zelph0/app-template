@@ -16,6 +16,7 @@ import {
   devDatabaseStep,
   identityStep,
   installStep,
+  optionsStep,
   pullRequestStep,
   removeAuthStep,
   themeStep,
@@ -23,7 +24,6 @@ import {
 } from "./lib/provision/app";
 import { type Context, type Logger, type Resolved, runSteps, type Step } from "./lib/provision/context";
 import {
-  assertOurRepo,
   environmentStep,
   getRepo,
   repoSettingsStep,
@@ -33,6 +33,7 @@ import {
 } from "./lib/provision/github";
 import { neonAuthStep, neonConnectionStep, neonFilesStep, neonResourceStep } from "./lib/provision/neon";
 import { parseProvisionArgs, USAGE } from "./lib/provision/options";
+import { checkExisting } from "./lib/provision/ownership";
 import { secretsStep, variablesStep, vercelBuildKeyStep } from "./lib/provision/secrets";
 import { cookieSecretStep, vercelGitStep, vercelProjectStep, vercelSettingsStep } from "./lib/provision/vercel";
 
@@ -41,6 +42,7 @@ export const STEPS: Step[] = [
   repoStep,
   workBranchStep,
   installStep,
+  optionsStep,
   identityStep,
   removeAuthStep,
   themeStep,
@@ -107,8 +109,7 @@ function preflight(argv: string[]): Context {
   const templateRepo = getRepo(ctx, template);
   if (!templateRepo?.is_template)
     throw new Error(`${template} isn't a GitHub template repo (Settings → Template repository).`);
-  const existing = getRepo(ctx);
-  if (existing) assertOurRepo(ctx, existing);
+  checkExisting(ctx); // a same-named repo / Vercel project / Neon resource must be ours (an earlier run)
   return ctx;
 }
 

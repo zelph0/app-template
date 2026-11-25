@@ -1,8 +1,10 @@
 name: Production migrate & deploy
 
 # After merge to main: apply migrations to the production Neon branch, THEN deploy and
-# promote production on Vercel. Git-triggered production deploys are off (vercel.json), so
-# production never runs code whose migrations haven't been applied. Never migrate prod by hand.
+# promote production through the deploy hook. Git-triggered production deploys are off
+# (vercel.json), and a production build fails while any migration is pending
+# (scripts/vercel-build.ts), so production never runs code ahead of its schema. Never migrate
+# prod by hand.
 
 on:
   push:
@@ -27,8 +29,12 @@ jobs:
         id: guard
         env:
           URL: ${{ secrets.PROD_DATABASE_URL_UNPOOLED }}
+          PROVISIONED: ${{ vars.VERCEL_PROJECT_ID }}
         run: |
-          if [ -z "$URL" ]; then
+          if [ -z "$URL" ] && [ -n "$PROVISIONED" ]; then
+            echo "::error::App is linked to Vercel but PROD_DATABASE_URL_UNPOOLED is missing. Re-run pnpm provision."
+            exit 1
+          elif [ -z "$URL" ]; then
             echo "PROD_DATABASE_URL_UNPOOLED is not set: nothing to migrate (template repo or app not provisioned)."
             echo "run=false" >> "$GITHUB_OUTPUT"
           else
@@ -56,7 +62,9 @@ jobs:
   deploy:
     name: deploy production
     needs: migrate
-    if: vars.VERCEL_PROJECT_ID != ''
+    # Only after migrations actually ran. The production build also fails while any migration is
+    # pending (scripts/vercel-build.ts), covering a newer commit the hook may build.
+    if: needs.migrate.outputs.ran == 'true' && vars.VERCEL_PROJECT_ID != ''
     runs-on: ubuntu-latest
     timeout-minutes: 5
     environment: production

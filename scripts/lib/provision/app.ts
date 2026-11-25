@@ -15,6 +15,43 @@ export const installStep: Step = {
   run: (ctx) => pnpm(ctx, ["install", "--frozen-lockfile"]),
 };
 
+/** Options that shape what gets created. Re-runs must match them; identity and theme may change. */
+export function recordedOptions(ctx: Context) {
+  const { owner, visibility, auth, providers, region, scope } = ctx.opts;
+  return { owner, visibility, auth, providers: [...providers].sort(), region, scope };
+}
+
+/** Pure: throws when a re-run's options differ from the ones the app was provisioned with. */
+export function assertSameOptions(recorded: Record<string, unknown>, current: Record<string, unknown>) {
+  const changed = Object.keys(current).filter((k) => JSON.stringify(recorded[k]) !== JSON.stringify(current[k]));
+  if (changed.length > 0) {
+    throw new Error(
+      `This app was provisioned with different options (${changed
+        .map((k) => `${k}: ${JSON.stringify(recorded[k])} → ${JSON.stringify(current[k])}`)
+        .join(", ")}). Re-run with the original options; changing them after the fact isn't supported.`,
+    );
+  }
+}
+
+const OPTIONS_FILE = "provision.json";
+
+export const optionsStep: Step = {
+  id: "options",
+  title: `Record the provisioning options (${OPTIONS_FILE})`,
+  isDone(ctx) {
+    const file = inApp(ctx, OPTIONS_FILE);
+    if (!existsSync(file)) return false;
+    assertSameOptions(JSON.parse(readFileSync(file, "utf8")) as Record<string, unknown>, recordedOptions(ctx));
+    return true;
+  },
+  run(ctx) {
+    writeFileSync(inApp(ctx, OPTIONS_FILE), `${JSON.stringify(recordedOptions(ctx), null, 2)}\n`);
+    if (existsSync(inApp(ctx, "node_modules/.bin/biome"))) {
+      ctx.cli.pnpm(["exec", "biome", "format", "--write", OPTIONS_FILE], { cwd: ctx.appDir });
+    }
+  },
+};
+
 const identityOf = (ctx: Context) => ({ name: ctx.opts.name, slug: ctx.opts.slug, description: ctx.opts.description });
 
 export const identityStep: Step = {
@@ -79,14 +116,27 @@ export const themeStep: Step = {
   },
 };
 
+/** `prisma migrate status` exits non-zero while migrations are pending (or the DB is unreachable). */
+const devIsMigrated = (ctx: Context) =>
+  succeeds(() => ctx.cli.pnpm(["exec", "prisma", "migrate", "status"], { cwd: ctx.appDir }));
+
 export const devDatabaseStep: Step = {
   id: "dev-database",
   title: "Dev database (Neon `dev` branch, .env.local, migrate + seed)",
   isDone: (ctx) =>
     existsSync(inApp(ctx, ".env.local")) &&
     readFileSync(inApp(ctx, ".env.local"), "utf8").includes("DATABASE_URL=") &&
-    branchExists(ctx, "dev"),
-  run: (ctx) => pnpm(ctx, ["db:env"]),
+    branchExists(ctx, "dev") &&
+    devIsMigrated(ctx),
+  run(ctx) {
+    pnpm(ctx, ["db:env"]);
+    // db:env migrates + seeds only when it creates the branch. If an earlier run stopped after
+    // creating it, finish the job here (the seed is safe to repeat).
+    if (!devIsMigrated(ctx)) {
+      pnpm(ctx, ["exec", "prisma", "migrate", "deploy"]);
+      pnpm(ctx, ["exec", "prisma", "db", "seed"]);
+    }
+  },
 };
 
 function branchExists(ctx: Context, name: string): boolean {
@@ -107,9 +157,24 @@ export const verifyStep: Step = {
 
 const git = (ctx: Context, args: string[]) => ctx.cli.git(args, { cwd: ctx.appDir });
 
-function findPr(ctx: Context): string | null {
-  const out = ctx.cli.gh(["pr", "list", "-R", ctx.repo, "--head", WORK_BRANCH, "--state", "all", "--json", "url"]);
-  return (JSON.parse(out) as { url: string }[])[0]?.url ?? null;
+/**
+ * The work branch's PR in one of `states`. isDone accepts open or merged (a closed-unmerged PR
+ * doesn't count); run only reuses an open one, so changes made after a merge get a new PR.
+ */
+function findPr(ctx: Context, states = ["OPEN", "MERGED"]): string | null {
+  const out = ctx.cli.gh([
+    "pr",
+    "list",
+    "-R",
+    ctx.repo,
+    "--head",
+    WORK_BRANCH,
+    "--state",
+    "all",
+    "--json",
+    "url,state",
+  ]);
+  return (JSON.parse(out) as { url: string; state: string }[]).find((p) => states.includes(p.state))?.url ?? null;
 }
 
 export function prBody(ctx: Context): string {
@@ -152,7 +217,7 @@ export const pullRequestStep: Step = {
       git(ctx, ["commit", "-m", `chore: provision ${ctx.opts.slug}`]);
     }
     git(ctx, ["push", "-u", "origin", WORK_BRANCH]);
-    const existing = findPr(ctx);
+    const existing = findPr(ctx, ["OPEN"]);
     ctx.facts.prUrl =
       existing ??
       ctx.cli.gh(

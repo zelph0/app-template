@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { CliError, parseJson, registerSecret } from "../cli";
 import type { Context, Step } from "./context";
 
-type VercelProject = {
+export type VercelProject = {
   id: string;
   name: string;
   accountId: string;
@@ -13,6 +13,9 @@ type VercelProject = {
   protectionBypass?: Record<string, { scope?: string }>;
 };
 
+/** The app folder once it exists, else the template checkout (before the clone, in preflight). */
+export const cwdFor = (ctx: Context) => (existsSync(ctx.appDir) ? ctx.appDir : process.cwd());
+
 /** `vercel api` against the team, with the team id explicit (a slug alone doesn't override the CLI default). */
 export function vercelApi(ctx: Context, path: string, options: { method?: string; body?: unknown } = {}): string {
   const sep = path.includes("?") ? "&" : "?";
@@ -20,7 +23,7 @@ export function vercelApi(ctx: Context, path: string, options: { method?: string
   if (options.method) args.push("-X", options.method);
   if (options.body !== undefined) args.push("--input", "-");
   return ctx.cli.vercel(args, {
-    cwd: ctx.appDir,
+    cwd: cwdFor(ctx),
     input: options.body === undefined ? undefined : JSON.stringify(options.body),
   });
 }

@@ -11,12 +11,11 @@ import { dirname, join, relative } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import { createCli, parseJson, succeeds } from "./lib/cli";
+import { createCli, parseJson } from "./lib/cli";
 import { ACTIONS_CREDENTIAL_NAME, BUILDS_CREDENTIAL_NAME, type Context } from "./lib/provision/context";
-import { assertOurRepo, getRepo } from "./lib/provision/github";
-import { findNeonProject } from "./lib/provision/neon";
+import { findNeonProject, revokeNeonApiKeys } from "./lib/provision/neon";
 import { SLUG } from "./lib/provision/options";
-import { getVercelProject } from "./lib/provision/vercel";
+import { checkExisting } from "./lib/provision/ownership";
 
 const TEMPLATE_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -69,17 +68,28 @@ async function main() {
     facts: {},
     log: { info: console.error, warn: console.error },
   };
-  const tokenName = ACTIONS_CREDENTIAL_NAME(slug);
   const actions: Action[] = [];
 
-  const repo = getRepo(ctx);
-  if (repo) assertOurRepo(ctx, repo);
+  // Refuses anything not provably this app's: a repo not generated from the template, a Vercel
+  // project connected to another repo, a Neon resource connected to another project.
+  const { repo, project, resource } = checkExisting(ctx);
+  if (!repo) console.warn(`GitHub repo ${ctx.repo} not found; ownership checked through the Vercel project instead.`);
 
-  const resourceExists = succeeds(() =>
-    cli.vercel(["integration", "resource", "inspect", slug, "--json", "--scope", team.slug], { cwd: TEMPLATE_ROOT }),
-  );
-  const neonProject = findNeonProject(ctx);
-  if (resourceExists) {
+  const neonProject = resource ? findNeonProject(ctx) : null;
+  if (neonProject?.org_id) {
+    ctx.facts.neonOrgId = neonProject.org_id;
+    const names = [ACTIONS_CREDENTIAL_NAME(slug), BUILDS_CREDENTIAL_NAME(slug)];
+    type Key = { id: number | string; name: string };
+    const keys = parseJson<Key[]>(
+      cli.neon(["api-keys", "list", "--org-id", neonProject.org_id, "--output", "json"]),
+      "neon api-keys list",
+    ).filter((k) => names.includes(k.name));
+    for (const name of new Set(keys.map((k) => k.name))) {
+      actions.push({ what: `Neon API key(s) "${name}"`, run: () => revokeNeonApiKeys(ctx, name) });
+    }
+  }
+
+  if (resource) {
     actions.push({
       what: `Neon database "${slug}"${neonProject ? ` (${neonProject.id})` : ""}: every branch and all data`,
       run: () =>
@@ -89,23 +99,9 @@ async function main() {
     });
   }
 
-  if (neonProject?.org_id) {
-    type Key = { id: number | string; name: string };
-    const keys = parseJson<Key[]>(
-      cli.neon(["api-keys", "list", "--org-id", neonProject.org_id, "--output", "json"]),
-      "neon api-keys list",
-    ).filter((k) => k.name === tokenName || k.name === BUILDS_CREDENTIAL_NAME(slug));
-    for (const key of keys) {
-      actions.push({
-        what: `Neon API key "${key.name}"`,
-        run: () => succeeds(() => cli.neon(["api-keys", "revoke", String(key.id)])),
-      });
-    }
-  }
-
-  if (getVercelProject(ctx)) {
+  if (project) {
     actions.push({
-      what: `Vercel project ${team.slug}/${slug} (deployments, env vars, domains)`,
+      what: `Vercel project ${team.slug}/${slug} (deployments, env vars, domains, deploy hook)`,
       run: () =>
         cli.vercel(["project", "delete", slug, "--confirm-name", slug, "--scope", team.slug], { cwd: TEMPLATE_ROOT }),
     });
