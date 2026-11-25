@@ -39,7 +39,7 @@ export const USAGE = `Usage: pnpm provision <slug> [options]
   --name "My App"          Display name (default: from the slug)
   --description "…"        One sentence for metadata (default: the name)
   --owner <login|org>      GitHub owner (default: your gh login)
-  --private                Private repo (default: public; free plans don't enforce rulesets on private repos)
+  --private                Private repo (default: public; on a free plan, main can't be protected on a private repo)
   --no-auth                Remove the auth module
   --providers google,github  Social sign-in next to email codes (default: google; "none" for email only)
   --theme-dir <dir>        Copy theme.css, fonts.ts and components/ui/* from this folder

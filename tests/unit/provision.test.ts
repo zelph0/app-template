@@ -11,7 +11,7 @@ import {
   TEMPLATE_README_MARKER,
 } from "../../scripts/lib/provision/app";
 import { type Context, runSteps, type Step } from "../../scripts/lib/provision/context";
-import { missingGhScopes, REQUIRED_CHECKS, repoOfRemote } from "../../scripts/lib/provision/github";
+import { missingGhScopes, REQUIRED_CHECKS, repoOfRemote, rulesetStep } from "../../scripts/lib/provision/github";
 import { connectionBody, isWantedConnection, renderMcpJson, renderNeonProject } from "../../scripts/lib/provision/neon";
 import { parseProvisionArgs, titleFromSlug } from "../../scripts/lib/provision/options";
 import { assertOwnership } from "../../scripts/lib/provision/ownership";
@@ -244,6 +244,49 @@ describe("secretsStep", () => {
     for (const call of calls) {
       for (const value of secretValues) expect(call.args.join(" ")).not.toContain(value);
     }
+  });
+});
+
+describe("rulesetStep", () => {
+  const cliAnswering = (rulesets: () => string): Cli => {
+    const fail = (tool: string) => (args: string[]) => {
+      throw new CliError(`${tool} ${args.join(" ")}`, 1, "unexpected call in test");
+    };
+    return {
+      gh: (args) => (args.join(" ") === "api repos/me/my-app/rulesets" ? rulesets() : fail("gh")(args)),
+      neon: fail("neon"),
+      vercel: fail("vercel"),
+      pnpm: fail("pnpm"),
+      git: fail("git"),
+      curl: fail("curl"),
+    };
+  };
+  const proOnly = () => {
+    throw new CliError(
+      "gh api repos/me/my-app/rulesets",
+      1,
+      "gh: Upgrade to GitHub Pro or make this repository public to enable this feature. (HTTP 403)",
+    );
+  };
+  const privateContext = (cli: Cli): Context => {
+    const ctx = fakeContext(cli);
+    return { ...ctx, opts: { ...ctx.opts, visibility: "private" } };
+  };
+
+  it("is skipped on a private repo when the plan has no rulesets", () => {
+    expect(rulesetStep.skip?.(privateContext(cliAnswering(proOnly)))).toMatch(/GitHub Pro/);
+  });
+
+  it("runs on a private repo whose plan has rulesets, and always on a public repo", () => {
+    expect(rulesetStep.skip?.(privateContext(cliAnswering(() => "[]")))).toBe(false);
+    expect(rulesetStep.skip?.(fakeContext(cliAnswering(proOnly)))).toBe(false);
+  });
+
+  it("still fails on any other error", () => {
+    const broken = cliAnswering(() => {
+      throw new CliError("gh api repos/me/my-app/rulesets", 1, "HTTP 500");
+    });
+    expect(() => rulesetStep.skip?.(privateContext(broken))).toThrow(/HTTP 500/);
   });
 });
 

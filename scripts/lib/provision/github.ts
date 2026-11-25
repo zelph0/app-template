@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { parseJson, succeeds } from "../cli";
+import { CliError, parseJson, succeeds } from "../cli";
 import { type Context, type Step, WORK_BRANCH, waitFor } from "./context";
 
 export type RepoInfo = {
@@ -252,9 +252,28 @@ function findRuleset(ctx: Context): Ruleset | null {
   return parseJson<Ruleset>(ctx.cli.gh(["api", `repos/${ctx.repo}/rulesets/${summary.id}`]), "gh api ruleset");
 }
 
+/**
+ * GitHub offers rulesets on private repos only with a paid plan: on a free one even reading them
+ * fails with HTTP 403. That's a limit of the plan, not a broken run, so the step is skipped.
+ */
+export function rulesetsUnavailable(ctx: Context): boolean {
+  if (ctx.opts.visibility !== "private") return false;
+  try {
+    ctx.cli.gh(["api", `repos/${ctx.repo}/rulesets`]);
+    return false;
+  } catch (error) {
+    if (error instanceof CliError && /HTTP 403|Upgrade to GitHub Pro/.test(error.stderr)) return true;
+    throw error;
+  }
+}
+
 export const rulesetStep: Step = {
   id: "github-ruleset",
   title: `Protect main (ruleset "${RULESET_NAME}": PR + green CI)`,
+  skip: (ctx) =>
+    rulesetsUnavailable(ctx)
+      ? "private repo on a free GitHub plan: rulesets need GitHub Pro, so main isn't protected; CI still runs on every PR"
+      : false,
   isDone: (ctx) => {
     const ruleset = findRuleset(ctx);
     if (ruleset?.enforcement !== "active") return false;
@@ -273,9 +292,6 @@ export const rulesetStep: Step = {
       ? ["api", "-X", "PUT", `repos/${ctx.repo}/rulesets/${existing.id}`, "--input", "-"]
       : ["api", "-X", "POST", `repos/${ctx.repo}/rulesets`, "--input", "-"];
     ctx.cli.gh(args, { input: JSON.stringify(rulesetBody()) });
-    if (ctx.opts.visibility === "private") {
-      ctx.log.warn("   Private repo: GitHub only enforces this ruleset on paid plans.");
-    }
   },
 };
 

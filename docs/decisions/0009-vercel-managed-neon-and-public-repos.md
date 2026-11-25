@@ -29,7 +29,8 @@ GitHub's free plans don't enforce rulesets or branch protection on private repos
 - Pin the Vercel CLI as a devDependency (`pnpm exec vercel`), like `neon`. The provisioning
   scripts use that pinned version.
 - New app repos default to **public** under the gh user, so `protect-main` is enforced for free.
-  `--private` exists for paid plans.
+  `--private` exists for paid plans. On a free plan GitHub refuses the rulesets API on a private
+  repo (HTTP 403), so provisioning skips `protect-main` with a note instead of failing.
 - CI credentials are least-privilege:
   - a Neon API key scoped to the one project;
   - no Vercel token: production deploys go through a deploy hook for `main`

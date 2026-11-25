@@ -79,8 +79,9 @@ Then one AskUserQuestion with the multiple-choice ones:
   `--providers google,github`, `--providers none`, `--no-auth`. The sign-in page shows exactly
   the chosen buttons. "No sign-in" means anyone with the URL acts as the owner: only for apps
   with nothing private in them, whatever the brief says about "just me".
-- **Repo visibility**: "Public" (recommended: GitHub only enforces the `main` protection on
-  private repos on paid plans) · "Private" (`--private`).
+- **Repo visibility**: "Public" (recommended: on a free GitHub plan a private repo can't have
+  the `main` protection, so provisioning skips it and merging isn't gated on CI) · "Private"
+  (`--private`).
 
 Optional features (analytics, uploads, rate limiting, background jobs) and custom domains aren't
 available yet. If the user asks, say so; don't improvise them.

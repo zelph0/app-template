@@ -119,7 +119,7 @@ production database and deploys the site. Useful options (`pnpm provision --help
 |---|---|
 | `--no-auth` | No sign-in at all |
 | `--providers google,github` | Social sign-in next to email codes (`none` for email only) |
-| `--private` | Private repo (GitHub only enforces the `main` protection on paid plans) |
+| `--private` | Private repo (on a free GitHub plan the `main` protection is skipped: rulesets need Pro) |
 | `--region fra1` | Database region (default `iad1`, US East) |
 
 If it stops halfway, fix what it says and run the **same command** again: it skips what's done.
