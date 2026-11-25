@@ -13,6 +13,7 @@ Next.js 16 (App Router, Cache Components) · Prisma 7 on Neon · Neon Auth · Ta
   - `pnpm test:integration` (DB tests)
   - `pnpm test:e2e` (Playwright: builds, starts on :3100)
 - `pnpm db:migrate --name x --create-only`, then `pnpm db:migrate`: schema changes, via the `migrate` skill
+- `pnpm provision <slug>` / `pnpm deprovision <slug>`: create / delete an app from this template (`docs/template-contract.md` §6)
 - `pnpm db:seed`, `pnpm db:check` (fails if the schema has changes with no migration), `pnpm template:check`
 
 ## Build features by copying `src/features/tasks/`

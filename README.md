@@ -12,11 +12,11 @@ Playwright · Biome · pnpm. The reasons behind each choice are in [`docs/decisi
 | Build step | What it gives you | Status |
 |---|---|---|
 | 1. This template | The base app, tests, CI and Claude Code setup | ✅ Done |
-| 2. Provisioning script | One command that creates a new app: GitHub repo, Neon database, Vercel project, secrets | Not built yet |
+| 2. Provisioning script | One command that creates a new app: GitHub repo, Neon database, Vercel project, secrets | ✅ Built (`pnpm provision`) |
 | 3. `/new-app` skill | Claude asks you a few questions (name, sign-in, style) and runs the script | Not built yet |
 
-So today you can **work on the template** from any computer (see below). Creating a new app
-from it becomes one command once steps 2 and 3 exist; this README gets those exact steps then.
+So today you can **work on the template** and **create a new app with one command** (see below).
+Step 3 will wrap that command in a few questions inside Claude Code.
 
 ---
 
@@ -57,6 +57,51 @@ from it becomes one command once steps 2 and 3 exist; this README gets those exa
 - Every edit it makes is auto-formatted, and it can't finish a task while the code has type
   or lint errors.
 - A read-only `reviewer` agent checks work against the spec before a PR.
+
+---
+
+## Create a new app
+
+One-time logins (the script never asks for passwords or keys; it reads them from these CLIs):
+
+```bash
+gh auth login
+pnpm exec neon login
+pnpm exec vercel login
+```
+
+Also once: give the [Vercel GitHub app](https://github.com/apps/vercel/installations/new) access to
+"All repositories", so new repos can be connected without a browser.
+
+Then, from this repo:
+
+```bash
+pnpm provision my-app --name "My App" --description "One sentence about it."
+```
+
+It creates `github.com/<you>/my-app` (public) and clones it next to this folder (`../my-app`). It also sets up:
+
+- a Vercel project with a preview for every PR;
+- a Neon database: production, a `dev` branch for your computer, and a branch per preview;
+- sign-in (email code + Google);
+- every GitHub secret CI needs;
+- protection for `main`.
+
+It ends by opening the app's first PR. Merge it when the checks are green: that sets up the
+production database and deploys the site. Useful options (`pnpm provision --help` for all):
+
+| Option | What it does |
+|---|---|
+| `--no-auth` | No sign-in at all |
+| `--providers google,github` | Social sign-in next to email codes (`none` for email only) |
+| `--private` | Private repo (GitHub only enforces the `main` protection on paid plans) |
+| `--region fra1` | Database region (default `iad1`, US East) |
+
+If it stops halfway, fix what it says and run the **same command** again: it skips what's done.
+Afterwards, open the app in Claude Code and run `/install-github-app` once (for `@claude` in PRs).
+
+To delete an app completely (repo, Vercel project, database): `pnpm deprovision my-app`. It shows
+what it will delete and asks you to type the name first. This can't be undone.
 
 ---
 
@@ -144,6 +189,8 @@ pnpm db:test && pnpm test && pnpm test:integration && pnpm test:e2e
 | `pnpm db:seed` | Load sample data into `dev` (safe to repeat) |
 | `pnpm db:studio` | Browse the `dev` database in your browser |
 | `pnpm auth:remove` | Remove sign-in entirely (for apps that don't need accounts) |
+| `pnpm provision <slug>` | Create a new app from this template (see above) |
+| `pnpm deprovision <slug>` | Delete an app's repo, Vercel project and database (asks first) |
 
 ### Where things live
 
