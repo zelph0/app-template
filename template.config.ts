@@ -4,6 +4,7 @@
  * copies `slug` into package.json and `name` into the README title. Everything else
  * (metadata, OG image, header, manifest) imports from here. See docs/template-contract.md.
  */
+// biome-ignore format: provisioning rewrites each value by line, so long values must stay on one line
 export const templateConfig = {
   /** Human-readable product name. */
   name: "App Template",

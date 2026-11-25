@@ -522,7 +522,8 @@ describe("missingGhScopes", () => {
   });
 });
 
-describe("renderAppReadme", () => {
+// README.app.md is template-only: provisioning deletes it from each new app.
+describe.skipIf(!existsSync(APP_README_SOURCE))("renderAppReadme", () => {
   const values: AppReadmeValues = {
     name: "Smoke Notes",
     slug: "smoke-notes",
@@ -533,7 +534,7 @@ describe("renderAppReadme", () => {
     vercelUrl: "https://vercel.com/team/smoke-notes",
     neonUrl: "https://console.neon.tech/app/projects/p-1",
   };
-  const source = readFileSync(APP_README_SOURCE, "utf8");
+  const source = existsSync(APP_README_SOURCE) ? readFileSync(APP_README_SOURCE, "utf8") : "";
 
   it("fills every placeholder in README.app.md and is about the app, not the template", () => {
     const out = renderAppReadme(source, values, true);
