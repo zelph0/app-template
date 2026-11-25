@@ -183,7 +183,10 @@ describe("secretsStep", () => {
       if (tool === "gh" && cmd.startsWith("secret list"))
         return JSON.stringify(existingRepoSecrets.map((name) => ({ name })));
       if (tool === "gh" && cmd.startsWith("secret set")) return "";
-      if (tool === "vercel" && cmd.startsWith("tokens create")) return JSON.stringify({ token: "vercel_tok_abcdefgh" });
+      if (tool === "vercel" && cmd.startsWith("deploy-hooks list")) return JSON.stringify({ hooks: [] });
+      if (tool === "vercel" && cmd.startsWith("deploy-hooks create")) {
+        return JSON.stringify({ hook: { url: "https://api.vercel.com/v1/integrations/deploy/prj_1/hook_abcdefgh" } });
+      }
       if (tool === "vercel" && cmd.startsWith("api /v9/projects/my-app")) {
         return JSON.stringify({
           id: "prj_1",
@@ -210,19 +213,20 @@ describe("secretsStep", () => {
 
     const sets = calls.filter((c) => c.tool === "gh" && c.args[0] === "secret" && c.args[1] === "set");
     expect(sets.map((c) => c.args[2])).toEqual([
-      "VERCEL_TOKEN",
+      "VERCEL_DEPLOY_HOOK_URL",
       "VERCEL_AUTOMATION_BYPASS_SECRET",
       "PROD_DATABASE_URL_UNPOOLED",
     ]);
     expect(sets.map((c) => c.options?.input)).toEqual([
-      "vercel_tok_abcdefgh",
+      "https://api.vercel.com/v1/integrations/deploy/prj_1/hook_abcdefgh",
       "bypass_secret_abcdefgh",
       "postgresql://u:pw_abcdefgh@ep-x.neon.tech/neondb",
     ]);
+    expect(sets[0]?.args).toContain("production");
     expect(sets[2]?.args).toContain("production");
     expect(calls.some((c) => c.tool === "neon" && c.args[0] === "api-keys")).toBe(false);
 
-    const secretValues = ["vercel_tok_abcdefgh", "bypass_secret_abcdefgh", "pw_abcdefgh"];
+    const secretValues = ["hook_abcdefgh", "bypass_secret_abcdefgh", "pw_abcdefgh"];
     for (const call of calls) {
       for (const value of secretValues) expect(call.args.join(" ")).not.toContain(value);
     }
