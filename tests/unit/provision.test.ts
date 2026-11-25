@@ -1,10 +1,12 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { type Cli, CliError, type RunOptions, redact, registerSecret } from "../../scripts/lib/cli";
+import { assertSameOptions } from "../../scripts/lib/provision/app";
 import { type Context, runSteps, type Step } from "../../scripts/lib/provision/context";
-import { REQUIRED_CHECKS } from "../../scripts/lib/provision/github";
+import { REQUIRED_CHECKS, repoOfRemote } from "../../scripts/lib/provision/github";
 import { connectionBody, isWantedConnection, renderMcpJson, renderNeonProject } from "../../scripts/lib/provision/neon";
 import { parseProvisionArgs, titleFromSlug } from "../../scripts/lib/provision/options";
+import { assertOwnership } from "../../scripts/lib/provision/ownership";
 import { secretsStep } from "../../scripts/lib/provision/secrets";
 import { renderTemplateConfig } from "../../scripts/lib/template-config";
 import { assertPreviewDatabase, deploymentOrigins } from "../../scripts/vercel-build";
@@ -261,12 +263,13 @@ describe("deploymentOrigins (vercel-build)", () => {
 });
 
 describe("assertPreviewDatabase (vercel-build)", () => {
-  const prod = "postgresql://u:p@ep-prod-123.us-east-1.aws.neon.tech/neondb";
+  const prod = ["ep-prod-123"];
   it("refuses a preview that points at production, pooled or not", () => {
     expect(() =>
       assertPreviewDatabase("postgresql://u:p@ep-prod-123-pooler.us-east-1.aws.neon.tech/neondb", prod),
     ).toThrow(/PRODUCTION/);
     expect(() => assertPreviewDatabase(undefined, prod)).toThrow(/missing/);
+    expect(() => assertPreviewDatabase("postgresql://u:p@ep-x.neon.tech/db", [])).toThrow(/no endpoint/);
   });
   it("accepts a preview branch", () => {
     expect(() =>
@@ -274,7 +277,6 @@ describe("assertPreviewDatabase (vercel-build)", () => {
     ).not.toThrow();
   });
 });
-
 describe("Neon connection", () => {
   it("wants production + preview with a database branch per preview, never development", () => {
     const body = connectionBody("prj_1");
@@ -282,5 +284,65 @@ describe("Neon connection", () => {
     expect(isWantedConnection({ projectId: "prj_1", envVarEnvironments: ["production", "preview"] })).toBe(false);
     expect(isWantedConnection({ ...body, envVarEnvironments: ["production", "preview", "development"] })).toBe(false);
     expect(isWantedConnection(undefined)).toBe(false);
+  });
+});
+
+describe("ownership", () => {
+  const ours = "me/my-app";
+  const repo = { full_name: ours, is_template: false, template_repository: { full_name: "me/app-template" } };
+  const project = (link?: { org: string; repo: string }) => ({
+    id: "prj_1",
+    name: "my-app",
+    accountId: "team_1",
+    link: link && { type: "github", ...link },
+  });
+  const resource = (projects: string[]) => ({
+    id: "store_1",
+    name: "my-app",
+    projects: projects.map((id) => ({ id })),
+  });
+
+  it("adopts what an earlier run created", () => {
+    expect(() =>
+      assertOwnership(ours, { repo, project: project({ org: "me", repo: "my-app" }), resource: resource(["prj_1"]) }),
+    ).not.toThrow();
+    // Interrupted before `vercel git connect`: the local link vouches for the project.
+    expect(() => assertOwnership(ours, { repo: null, project: project(), resource: null }, "prj_1")).not.toThrow();
+  });
+
+  it("refuses another app's project or database", () => {
+    expect(() =>
+      assertOwnership(ours, { repo, project: project({ org: "acme", repo: "my-app" }), resource: null }),
+    ).toThrow(/acme\/my-app/);
+    expect(() =>
+      assertOwnership(ours, {
+        repo,
+        project: project({ org: "me", repo: "my-app" }),
+        resource: resource(["prj_other"]),
+      }),
+    ).toThrow(/other project/);
+    expect(() => assertOwnership(ours, { repo: null, project: null, resource: resource([]) })).toThrow(
+      /can't be verified/,
+    );
+    expect(() => assertOwnership(ours, { repo: null, project: project(), resource: null })).toThrow(
+      /can't be verified/,
+    );
+  });
+});
+
+describe("repoOfRemote", () => {
+  it("matches owner/repo exactly", () => {
+    expect(repoOfRemote("git@github.com:me/my-app.git")).toBe("me/my-app");
+    expect(repoOfRemote("https://github.com/Me/My-App")).toBe("me/my-app");
+    expect(repoOfRemote("git@github.com:me/my-app-old.git")).toBe("me/my-app-old");
+    expect(repoOfRemote("https://gitlab.com/me/my-app")).toBeNull();
+  });
+});
+
+describe("assertSameOptions", () => {
+  it("allows identical options and names what changed otherwise", () => {
+    const opts = { auth: true, providers: ["google"], region: "iad1" };
+    expect(() => assertSameOptions(opts, { ...opts })).not.toThrow();
+    expect(() => assertSameOptions(opts, { ...opts, auth: false })).toThrow(/auth: true → false/);
   });
 });

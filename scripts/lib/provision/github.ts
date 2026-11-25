@@ -29,10 +29,18 @@ export function assertOurRepo(ctx: Context, repo: RepoInfo) {
   }
 }
 
-const isClone = (ctx: Context) =>
-  existsSync(join(ctx.appDir, ".git")) &&
-  succeeds(() => ctx.cli.git(["remote", "get-url", "origin"], { cwd: ctx.appDir })) &&
-  ctx.cli.git(["remote", "get-url", "origin"], { cwd: ctx.appDir }).includes(`${ctx.repo}`);
+/** `owner/repo` of a GitHub remote URL (ssh or https), lowercased, or null. */
+export function repoOfRemote(url: string): string | null {
+  const match = url.trim().match(/github\.com[:/]([^/\s]+\/[^/\s]+?)(?:\.git)?\/?$/i);
+  return match?.[1]?.toLowerCase() ?? null;
+}
+
+function isClone(ctx: Context): boolean {
+  if (!existsSync(join(ctx.appDir, ".git"))) return false;
+  let url = "";
+  if (!succeeds(() => (url = ctx.cli.git(["remote", "get-url", "origin"], { cwd: ctx.appDir })))) return false;
+  return repoOfRemote(url) === ctx.repo.toLowerCase();
+}
 
 export const repoStep: Step = {
   id: "github-repo",
@@ -109,18 +117,21 @@ export const repoSettingsStep: Step = {
   title: "GitHub settings (delete merged branches, secret push protection)",
   isDone: (ctx) => {
     const repo = getRepo(ctx);
-    return (
-      repo?.delete_branch_on_merge === true &&
-      repo.security_and_analysis?.secret_scanning_push_protection?.status === "enabled"
-    );
+    // Push protection is free on public repos only; private repos need GitHub Secret Protection.
+    const pushProtected =
+      ctx.opts.visibility !== "public" ||
+      repo?.security_and_analysis?.secret_scanning_push_protection?.status === "enabled";
+    return repo?.delete_branch_on_merge === true && pushProtected;
   },
   run(ctx) {
     const body = {
       delete_branch_on_merge: true,
-      security_and_analysis: {
-        secret_scanning: { status: "enabled" },
-        secret_scanning_push_protection: { status: "enabled" },
-      },
+      ...(ctx.opts.visibility === "public" && {
+        security_and_analysis: {
+          secret_scanning: { status: "enabled" },
+          secret_scanning_push_protection: { status: "enabled" },
+        },
+      }),
     };
     ctx.cli.gh(["api", "-X", "PATCH", `repos/${ctx.repo}`, "--input", "-"], { input: JSON.stringify(body) });
   },
@@ -162,6 +173,7 @@ export function rulesetBody() {
 
 type RulesetSummary = { id: number; name: string };
 type Ruleset = RulesetSummary & {
+  enforcement?: string;
   rules: { type: string; parameters?: { required_status_checks?: { context: string }[] } }[];
 };
 
@@ -177,8 +189,11 @@ export const rulesetStep: Step = {
   title: `Protect main (ruleset "${RULESET_NAME}": PR + green CI)`,
   isDone: (ctx) => {
     const ruleset = findRuleset(ctx);
+    if (ruleset?.enforcement !== "active") return false;
+    const types = new Set(ruleset.rules.map((r) => r.type));
+    if (!["deletion", "non_fast_forward", "pull_request"].every((t) => types.has(t))) return false;
     const checks =
-      ruleset?.rules
+      ruleset.rules
         .find((r) => r.type === "required_status_checks")
         ?.parameters?.required_status_checks?.map((c) => c.context)
         .sort() ?? [];

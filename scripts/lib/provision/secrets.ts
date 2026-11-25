@@ -5,7 +5,7 @@
  */
 import { ACTIONS_CREDENTIAL_NAME, BUILDS_CREDENTIAL_NAME, type Context, type Step } from "./context";
 import { listSecrets, listVariables, setSecret, setVariable } from "./github";
-import { createNeonApiKey, productionDirectUrl } from "./neon";
+import { productionDirectUrl, withFreshNeonApiKey } from "./neon";
 import { ensureBypassSecret, ensureDeployHook, envTargets } from "./vercel";
 
 function wantedVariables(ctx: Context): Record<string, string> {
@@ -32,13 +32,26 @@ export const variablesStep: Step = {
   },
 };
 
-type SecretSpec = { name: string; environment?: string; value(ctx: Context): string };
+type SecretSpec = {
+  name: string;
+  environment?: string;
+  /** Produces the value and passes it to `store` (which runs `gh secret set`). */
+  provide(ctx: Context, store: (value: string) => void): void;
+};
+
+const plain =
+  (value: (ctx: Context) => string): SecretSpec["provide"] =>
+  (ctx, store) =>
+    store(value(ctx));
 
 export const SECRETS: SecretSpec[] = [
-  { name: "NEON_API_KEY", value: (ctx) => createNeonApiKey(ctx, ACTIONS_CREDENTIAL_NAME(ctx.opts.slug)) },
-  { name: "VERCEL_DEPLOY_HOOK_URL", environment: "production", value: ensureDeployHook },
-  { name: "VERCEL_AUTOMATION_BYPASS_SECRET", value: ensureBypassSecret },
-  { name: "PROD_DATABASE_URL_UNPOOLED", environment: "production", value: productionDirectUrl },
+  {
+    name: "NEON_API_KEY",
+    provide: (ctx, store) => withFreshNeonApiKey(ctx, ACTIONS_CREDENTIAL_NAME(ctx.opts.slug), store),
+  },
+  { name: "VERCEL_DEPLOY_HOOK_URL", environment: "production", provide: plain(ensureDeployHook) },
+  { name: "VERCEL_AUTOMATION_BYPASS_SECRET", provide: plain(ensureBypassSecret) },
+  { name: "PROD_DATABASE_URL_UNPOOLED", environment: "production", provide: plain(productionDirectUrl) },
 ];
 
 function missingSecrets(ctx: Context): SecretSpec[] {
@@ -52,7 +65,9 @@ export const secretsStep: Step = {
   title: "GitHub secrets (Neon API key, deploy hook, bypass secret, production DB URL)",
   isDone: (ctx) => missingSecrets(ctx).length === 0,
   run(ctx) {
-    for (const spec of missingSecrets(ctx)) setSecret(ctx, spec.name, spec.value(ctx), spec.environment);
+    for (const spec of missingSecrets(ctx)) {
+      spec.provide(ctx, (value) => setSecret(ctx, spec.name, value, spec.environment));
+    }
   },
 };
 
@@ -71,14 +86,15 @@ export const vercelBuildKeyStep: Step = {
     return BUILD_TARGETS.every((t) => targets?.has(t));
   },
   run(ctx) {
-    const existing = envTargets(ctx).get("NEON_API_KEY");
-    const key = createNeonApiKey(ctx, BUILDS_CREDENTIAL_NAME(ctx.opts.slug));
-    for (const target of BUILD_TARGETS) {
-      if (existing?.has(target)) continue;
-      ctx.cli.vercel(["env", "add", "NEON_API_KEY", "-e", target, "--sensitive", "--yes"], {
-        cwd: ctx.appDir,
-        input: key,
-      });
-    }
+    // One key for both targets. A fresh key replaces (and revokes) any earlier one, so write it to
+    // every target, overwriting a value a previous, interrupted run left behind.
+    withFreshNeonApiKey(ctx, BUILDS_CREDENTIAL_NAME(ctx.opts.slug), (key) => {
+      for (const target of BUILD_TARGETS) {
+        ctx.cli.vercel(["env", "add", "NEON_API_KEY", "-e", target, "--sensitive", "--force", "--yes"], {
+          cwd: ctx.appDir,
+          input: key,
+        });
+      }
+    });
   },
 };
