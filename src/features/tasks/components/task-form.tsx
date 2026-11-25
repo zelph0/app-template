@@ -12,9 +12,13 @@ import { createTask, updateTask } from "../actions";
 import { TASK_NOTES_MAX, TASK_TITLE_MAX } from "../schema";
 import type { TaskDTO } from "../types";
 
-type Props =
+type Props = (
   | { mode: "create"; task?: undefined; onDone?: () => void }
-  | { mode: "edit"; task: TaskDTO; onDone?: () => void };
+  | { mode: "edit"; task: TaskDTO; onDone?: () => void }
+) & {
+  /** Start in this state instead of idle. Used by /styleguide/compare to show validation errors. */
+  initialState?: ActionResult<TaskDTO>;
+};
 
 /**
  * One form for create and edit. Pattern to copy:
@@ -23,12 +27,12 @@ type Props =
  * - submitted values echoed back on failure (React resets the form after an action)
  * - pending state disables the submit button
  */
-export function TaskForm({ mode, task, onDone }: Props) {
+export function TaskForm({ mode, task, onDone, initialState = idle }: Props) {
   const action = mode === "create" ? createTask : updateTask;
-  const [state, formAction, pending] = useActionState<ActionResult<TaskDTO>, FormData>(action, idle);
+  const [state, formAction, pending] = useActionState<ActionResult<TaskDTO>, FormData>(action, initialState);
   const formRef = useRef<HTMLFormElement>(null);
   const id = useId();
-  const lastHandled = useRef<ActionResult<TaskDTO>>(idle);
+  const lastHandled = useRef<ActionResult<TaskDTO>>(initialState);
 
   useEffect(() => {
     if (state === lastHandled.current) return;
