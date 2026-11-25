@@ -31,10 +31,10 @@ import {
   rulesetStep,
   workBranchStep,
 } from "./lib/provision/github";
-import { neonAuthStep, neonFilesStep, neonResourceStep } from "./lib/provision/neon";
+import { neonAuthStep, neonConnectionStep, neonFilesStep, neonResourceStep } from "./lib/provision/neon";
 import { parseProvisionArgs, USAGE } from "./lib/provision/options";
 import { secretsStep, variablesStep, vercelBuildKeyStep } from "./lib/provision/secrets";
-import { cookieSecretStep, vercelGitStep, vercelProjectStep } from "./lib/provision/vercel";
+import { cookieSecretStep, vercelGitStep, vercelProjectStep, vercelSettingsStep } from "./lib/provision/vercel";
 
 /** In order: each step may rely on facts recorded by the ones before it. */
 export const STEPS: Step[] = [
@@ -46,7 +46,9 @@ export const STEPS: Step[] = [
   themeStep,
   vercelProjectStep,
   vercelGitStep,
+  vercelSettingsStep,
   neonResourceStep,
+  neonConnectionStep,
   neonFilesStep,
   neonAuthStep,
   devDatabaseStep,

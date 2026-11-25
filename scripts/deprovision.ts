@@ -76,14 +76,14 @@ async function main() {
   if (repo) assertOurRepo(ctx, repo);
 
   const resourceExists = succeeds(() =>
-    cli.vercel(["integration-resource", "inspect", slug, "--json", "--scope", team.slug], { cwd: TEMPLATE_ROOT }),
+    cli.vercel(["integration", "resource", "inspect", slug, "--json", "--scope", team.slug], { cwd: TEMPLATE_ROOT }),
   );
   const neonProject = findNeonProject(ctx);
   if (resourceExists) {
     actions.push({
       what: `Neon database "${slug}"${neonProject ? ` (${neonProject.id})` : ""}: every branch and all data`,
       run: () =>
-        cli.vercel(["integration-resource", "delete", slug, "--disconnect-all", "--yes", "--scope", team.slug], {
+        cli.vercel(["integration", "resource", "delete", slug, "--disconnect-all", "--yes", "--scope", team.slug], {
           cwd: TEMPLATE_ROOT,
         }),
     });
