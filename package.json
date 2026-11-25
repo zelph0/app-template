@@ -26,6 +26,8 @@
     "db:test": "tsx scripts/test-db.ts",
     "template:sync": "tsx scripts/sync-template-config.ts",
     "template:check": "tsx scripts/sync-template-config.ts --check",
+    "style:check": "playwright test -c playwright.style.config.ts",
+    "style:reset": "tsx scripts/style-candidates.ts",
     "auth:remove": "tsx scripts/remove-auth.ts",
     "provision": "tsx scripts/provision.ts",
     "deprovision": "tsx scripts/deprovision.ts",

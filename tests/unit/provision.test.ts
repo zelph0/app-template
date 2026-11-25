@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { type Cli, CliError, type RunOptions, redact, registerSecret } from "../../scripts/lib/cli";
 import { assertSameOptions } from "../../scripts/lib/provision/app";
@@ -8,6 +8,7 @@ import { connectionBody, isWantedConnection, renderMcpJson, renderNeonProject } 
 import { parseProvisionArgs, titleFromSlug } from "../../scripts/lib/provision/options";
 import { assertOwnership } from "../../scripts/lib/provision/ownership";
 import { secretsStep } from "../../scripts/lib/provision/secrets";
+import { CANDIDATES_DIR, EMPTY_CANDIDATE_FILES } from "../../scripts/lib/style-candidates";
 import { renderTemplateConfig } from "../../scripts/lib/template-config";
 import { assertPreviewDatabase, deploymentOrigins } from "../../scripts/vercel-build";
 
@@ -344,5 +345,15 @@ describe("assertSameOptions", () => {
     const opts = { auth: true, providers: ["google"], region: "iad1" };
     expect(() => assertSameOptions(opts, { ...opts })).not.toThrow();
     expect(() => assertSameOptions(opts, { ...opts, auth: false })).toThrow(/auth: true → false/);
+  });
+});
+
+describe("style candidates", () => {
+  it("are never committed: src/styles/candidates holds exactly the empty files", () => {
+    const names = readdirSync(CANDIDATES_DIR).sort();
+    expect(names).toEqual(Object.keys(EMPTY_CANDIDATE_FILES).sort());
+    for (const [name, contents] of Object.entries(EMPTY_CANDIDATE_FILES)) {
+      expect(readFileSync(`${CANDIDATES_DIR}/${name}`, "utf8"), `${name}: run pnpm style:reset`).toBe(contents);
+    }
   });
 });

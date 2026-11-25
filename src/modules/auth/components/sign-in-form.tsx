@@ -24,6 +24,7 @@ export function SignInForm({ next }: { next: string }) {
   const [notice, setNotice] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const otpId = useId();
+  const emailId = useId();
 
   function sendCode(email: string) {
     setError(null);
@@ -129,9 +130,9 @@ export function SignInForm({ next }: { next: string }) {
       >
         <FieldGroup>
           <Field data-invalid={error ? true : undefined}>
-            <FieldLabel htmlFor="email">Email</FieldLabel>
+            <FieldLabel htmlFor={emailId}>Email</FieldLabel>
             <Input
-              id="email"
+              id={emailId}
               name="email"
               type="email"
               autoComplete="email webauthn"
@@ -139,9 +140,9 @@ export function SignInForm({ next }: { next: string }) {
               placeholder="you@example.com"
               required
               aria-invalid={error ? true : undefined}
-              aria-describedby={error ? "email-error" : undefined}
+              aria-describedby={error ? `${emailId}-error` : undefined}
             />
-            <FieldError id="email-error">{error}</FieldError>
+            <FieldError id={`${emailId}-error`}>{error}</FieldError>
           </Field>
           <Button type="submit" size="lg" disabled={pending}>
             <MailIcon data-icon="inline-start" />

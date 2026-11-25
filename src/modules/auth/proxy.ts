@@ -5,7 +5,15 @@ import { auth } from "@/modules/auth/server";
  * Every page is PRIVATE unless listed here. Add marketing/public pages explicitly.
  * (Auth routes such as /auth/* and /api/auth/* are always public.)
  */
-export const PUBLIC_ROUTES = ["/", "/styleguide", "/api/health", "/opengraph-image", "/robots.txt", "/sitemap.xml"];
+export const PUBLIC_ROUTES = [
+  "/",
+  "/styleguide",
+  "/styleguide/compare",
+  "/api/health",
+  "/opengraph-image",
+  "/robots.txt",
+  "/sitemap.xml",
+];
 
 const neonAuth = auth.middleware({ loginUrl: "/auth/sign-in", publicRoutes: PUBLIC_ROUTES });
 
