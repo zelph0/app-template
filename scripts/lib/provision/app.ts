@@ -1,10 +1,12 @@
 /** Steps that change the new app's files (identity, auth module, theme), check it, and open the PR. */
 import { copyFileSync, existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { succeeds } from "../cli";
 import { renderTemplateConfig } from "../template-config";
 import { type Context, type Step, WORK_BRANCH } from "./context";
 import { findPr } from "./github";
+import { productionDomain } from "./vercel";
 
 const inApp = (ctx: Context, path: string) => join(ctx.appDir, path);
 const pnpm = (ctx: Context, args: string[]) => ctx.cli.pnpm(args, { cwd: ctx.appDir, inherit: true });
@@ -72,7 +74,7 @@ export const identityStep: Step = {
 };
 
 /** Files that only make sense in the template itself (the /new-app skill and its linker, the build spec). */
-export const TEMPLATE_ONLY = ["skills", "scripts/link-skill.ts", "TEMPLATE_SPEC.md"];
+export const TEMPLATE_ONLY = ["skills", "scripts/link-skill.ts", "TEMPLATE_SPEC.md", "README.app.md"];
 const TEMPLATE_ONLY_SCRIPTS = ["skill:link"];
 
 function packageScripts(ctx: Context): Record<string, string> {
@@ -83,7 +85,7 @@ function packageScripts(ctx: Context): Record<string, string> {
 
 export const templateOnlyStep: Step = {
   id: "template-only",
-  title: "Remove template-only files (skills/, skill:link, TEMPLATE_SPEC.md)",
+  title: "Remove template-only files (skills/, skill:link, TEMPLATE_SPEC.md, README.app.md)",
   isDone: (ctx) =>
     TEMPLATE_ONLY.every((path) => !existsSync(inApp(ctx, path))) &&
     TEMPLATE_ONLY_SCRIPTS.every((name) => !(name in packageScripts(ctx))),
@@ -287,5 +289,65 @@ export const pullRequestStep: Step = {
         ],
         { cwd: ctx.appDir, input: prBody(ctx) },
       );
+  },
+};
+
+/** The template's README says what the template is; this marker is on it and on no app's README. */
+export const TEMPLATE_README_MARKER = "<!-- template:readme -->";
+/** The README every new app starts with. Read from the template checkout provisioning runs from. */
+export const APP_README_SOURCE = join(dirname(fileURLToPath(import.meta.url)), "../../../README.app.md");
+
+export type AppReadmeValues = {
+  name: string;
+  slug: string;
+  description: string;
+  repo: string;
+  templateRepo: string;
+  siteUrl: string | null;
+  vercelUrl: string;
+  neonUrl: string;
+};
+
+/**
+ * Pure: README.app.md with its {{placeholders}} filled. Without auth, lines marked
+ * `<!-- @auth-module -->` are dropped (remove-auth has already run by then).
+ */
+export function renderAppReadme(source: string, values: AppReadmeValues, auth: boolean): string {
+  const fills: Record<string, string> = {
+    ...values,
+    siteLink: values.siteUrl ? `<${values.siteUrl}>` : `see **Domains** in the [Vercel project](${values.vercelUrl})`,
+    siteUrl: values.siteUrl ?? "",
+  };
+  const lines = source.split("\n").filter((line) => auth || !line.trimEnd().endsWith("<!-- @auth-module -->"));
+  const out = lines.join("\n").replace(/\{\{(\w+)\}\}/g, (match, key: string) => {
+    if (!(key in fills)) throw new Error(`README.app.md: unknown placeholder ${match}.`);
+    return fills[key] ?? "";
+  });
+  return out;
+}
+
+/** Replaces the template's README with one about this app. Runs once: /new-app edits it afterwards. */
+export const appReadmeStep: Step = {
+  id: "app-readme",
+  title: "The app's own README (from README.app.md)",
+  isDone: (ctx) => !readFileSync(inApp(ctx, "README.md"), "utf8").includes(TEMPLATE_README_MARKER),
+  run(ctx) {
+    const domain = productionDomain(ctx);
+    const values: AppReadmeValues = {
+      name: ctx.opts.name,
+      slug: ctx.opts.slug,
+      description: ctx.opts.description,
+      repo: ctx.repo,
+      templateRepo: ctx.opts.template,
+      siteUrl: domain ? `https://${domain}` : null,
+      vercelUrl: `https://vercel.com/${ctx.opts.scope}/${ctx.opts.slug}`,
+      neonUrl: ctx.facts.neonProjectId
+        ? `https://console.neon.tech/app/projects/${ctx.facts.neonProjectId}`
+        : "https://console.neon.tech",
+    };
+    writeFileSync(
+      inApp(ctx, "README.md"),
+      renderAppReadme(readFileSync(APP_README_SOURCE, "utf8"), values, ctx.opts.auth),
+    );
   },
 };

@@ -20,6 +20,10 @@ Files that can't import TypeScript are kept in sync by `pnpm template:sync`:
 - `package.json` → `"name"` = `slug`
 - `README.md` → the line ending in `<!-- template:name -->` gets `name`
 
+`README.md` describes the template itself and carries `<!-- template:readme -->`. A new app's
+README comes from `README.app.md` instead (provisioning step 6): the app's name, description,
+live site, links, how to run it and how changes ship. `README.app.md` is template-only.
+
 `pnpm template:check` (run in CI) fails if they drift.
 
 **Provisioning:** rewrite the `name`, `slug` and `description` values in `templateConfig`
@@ -135,7 +139,7 @@ command.
    `provision.json`.
 3. Write the app identity to `template.config.ts`, then run `pnpm template:sync`. Remove the
    template-only files: `skills/` (the `/new-app` source), `scripts/link-skill.ts` with its
-   `skill:link` script, and `TEMPLATE_SPEC.md`. With auth, write the chosen providers to
+   `skill:link` script, `TEMPLATE_SPEC.md` and `README.app.md`. With auth, write the chosen providers to
    `src/modules/auth/providers.ts`: the sign-in buttons, matching what Neon Auth enables.
 4. With `--no-auth`: run `pnpm auth:remove`. With `--theme-dir`: copy the theme files.
 5. Create the Vercel project, link the folder, and connect the repo. Turn on GitHub deployment
@@ -144,6 +148,8 @@ command.
 6. Create the Neon database through the Vercel-managed integration (`--no-connect`). Then connect
    it through the store connections API, for production + preview, with **a database branch per
    preview deployment**: the CLI's own connect can't set that. Write the project files listed in §1.
+   Replace `README.md` with `README.app.md`, filled in (it needs the Vercel domain and the Neon
+   project id, so it runs here). It runs once: `/new-app` edits the README afterwards.
 7. Set up Neon Auth on the production branch: enabled, providers, localhost. This runs before any
    other branch exists, because branches copy their parent's auth config. Deployed URLs are
    trusted later, by each build.

@@ -120,7 +120,11 @@ chosen style lands in the same first PR.
 ## 3. Write the brief into the app, then style it
 
 First write the agreed brief to `<dir>/docs/brief.md` (replace the blank form; set `Status:
-agreed <date>`). It goes into the first PR with the style.
+agreed <date>`). Then make the README about this app: provisioning already replaced the
+template's README with one built from `README.app.md` (name, description, live site, links, how
+to run it). Replace its "What it does" section, comment included, with a short summary of the
+brief: who it's for, then the first-version features as a bulleted list, then a link to
+`docs/brief.md` for the rest. Both go into the first PR with the style.
 
 ### Style: generate options, preview them, let the user choose
 

@@ -1,7 +1,15 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { type Cli, CliError, type RunOptions, redact, registerSecret } from "../../scripts/lib/cli";
-import { assertSameOptions, renderProviders, TEMPLATE_ONLY } from "../../scripts/lib/provision/app";
+import {
+  APP_README_SOURCE,
+  type AppReadmeValues,
+  assertSameOptions,
+  renderAppReadme,
+  renderProviders,
+  TEMPLATE_ONLY,
+  TEMPLATE_README_MARKER,
+} from "../../scripts/lib/provision/app";
 import { type Context, runSteps, type Step } from "../../scripts/lib/provision/context";
 import { missingGhScopes, REQUIRED_CHECKS, repoOfRemote } from "../../scripts/lib/provision/github";
 import { connectionBody, isWantedConnection, renderMcpJson, renderNeonProject } from "../../scripts/lib/provision/neon";
@@ -468,5 +476,48 @@ describe("missingGhScopes", () => {
   });
   it("can't tell without the header (fine-grained tokens), so reports nothing", () => {
     expect(missingGhScopes("HTTP/2.0 200 OK\n\n{}")).toEqual([]);
+  });
+});
+
+describe("renderAppReadme", () => {
+  const values: AppReadmeValues = {
+    name: "Smoke Notes",
+    slug: "smoke-notes",
+    description: "Notes that drift like smoke.",
+    repo: "me/smoke-notes",
+    templateRepo: "me/app-template",
+    siteUrl: "https://smoke-notes.vercel.app",
+    vercelUrl: "https://vercel.com/team/smoke-notes",
+    neonUrl: "https://console.neon.tech/app/projects/p-1",
+  };
+  const source = readFileSync(APP_README_SOURCE, "utf8");
+
+  it("fills every placeholder in README.app.md and is about the app, not the template", () => {
+    const out = renderAppReadme(source, values, true);
+    expect(out).not.toMatch(/\{\{/);
+    expect(out).not.toContain(TEMPLATE_README_MARKER);
+    expect(out.split("\n")[0]).toBe("# Smoke Notes <!-- template:name -->");
+    expect(out).toContain("Notes that drift like smoke.");
+    expect(out).toContain("<https://smoke-notes.vercel.app>");
+    expect(out).toContain("gh repo clone me/smoke-notes");
+    expect(out).toContain("SEED_USER_EMAIL");
+  });
+
+  it("drops sign-in lines for apps without auth", () => {
+    expect(renderAppReadme(source, values, false)).not.toContain("SEED_USER_EMAIL");
+  });
+
+  it("points at the Vercel project when the domain isn't known", () => {
+    expect(renderAppReadme("Live: {{siteLink}}", { ...values, siteUrl: null }, true)).toBe(
+      "Live: see **Domains** in the [Vercel project](https://vercel.com/team/smoke-notes)",
+    );
+  });
+
+  it("refuses unknown placeholders", () => {
+    expect(() => renderAppReadme("{{nope}}", values, true)).toThrow(/unknown placeholder/);
+  });
+
+  it("the template's own README carries the marker the step looks for", () => {
+    expect(readFileSync("README.md", "utf8")).toContain(TEMPLATE_README_MARKER);
   });
 });

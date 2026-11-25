@@ -1,4 +1,5 @@
 # App Template <!-- template:name -->
+<!-- template:readme --> <!-- This README describes the template. New apps get README.app.md instead. -->
 
 A starting point for new web apps. It comes with a database, sign-in, a finished example
 feature (a to-do list called **Tasks**), tests, and safety rails so Claude Code can build on
@@ -101,7 +102,9 @@ Under the hood it runs `pnpm provision`, which you can also run yourself:
 pnpm provision my-app --name "My App" --description "One sentence about it."
 ```
 
-It creates `github.com/<you>/my-app` (public) and clones it next to this folder (`../my-app`). It also sets up:
+It creates `github.com/<you>/my-app` (public) and clones it next to this folder (`../my-app`).
+The app gets its own README, about the app rather than this template ([`README.app.md`](README.app.md)
+is the starting point). It also sets up:
 
 - a Vercel project with a preview for every PR;
 - a Neon database: production, a `dev` branch for your computer, and a branch per preview;

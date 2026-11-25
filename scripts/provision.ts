@@ -14,6 +14,7 @@ import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createCli, parseJson } from "./lib/cli";
 import {
+  appReadmeStep,
   authProvidersStep,
   devDatabaseStep,
   identityStep,
@@ -64,6 +65,7 @@ export const STEPS: Step[] = [
   vercelGitStep,
   vercelSettingsStep,
   neonResourceStep,
+  appReadmeStep, // needs the Vercel project (its domain) and the Neon project id
   neonConnectionStep,
   neonFilesStep,
   neonAuthStep,
