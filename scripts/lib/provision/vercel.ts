@@ -39,6 +39,22 @@ export function getVercelProject(ctx: Context): VercelProject | null {
   }
 }
 
+/**
+ * The project's own `<name>.vercel.app` domain. Vercel assigns it when the project is created, so
+ * it's known before anything is deployed. Null when it can't be read.
+ */
+export function productionDomain(ctx: Context): string | null {
+  try {
+    const { domains } = parseJson<{
+      domains?: { name: string; gitBranch?: string | null; redirect?: string | null }[];
+    }>(vercelApi(ctx, `/v9/projects/${ctx.opts.slug}/domains`), "vercel api /v9/projects/…/domains");
+    return domains?.find((d) => !d.gitBranch && !d.redirect)?.name ?? null;
+  } catch (error) {
+    if (error instanceof CliError) return null;
+    throw error;
+  }
+}
+
 type LinkFile = { projectId: string; orgId: string; projectName?: string };
 
 export function readLink(ctx: Context): LinkFile | null {
