@@ -151,7 +151,7 @@ export function ensureDeployHook(ctx: Context): string {
   );
   const existing = listed.hooks?.find((h) => h.name === DEPLOY_HOOK_NAME)?.url;
   if (existing) return registerSecret(existing);
-  const out = ctx.cli.vercel(["deploy-hooks", "create", DEPLOY_HOOK_NAME, "--git-branch", "main", "--format", "json"], {
+  const out = ctx.cli.vercel(["deploy-hooks", "create", DEPLOY_HOOK_NAME, "--git-branch", "main"], {
     cwd: ctx.appDir,
   });
   const url = out.match(HOOK_URL)?.[0];
