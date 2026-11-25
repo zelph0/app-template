@@ -6,7 +6,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { CliError, parseJson, registerSecret } from "../cli";
-import type { Context, Step } from "./context";
+import { type Context, type Step, waitFor } from "./context";
 import { envTargets } from "./vercel";
 
 const NEON_PROJECT_ID = /\b[a-z]+-[a-z]+-\d{8}\b/;
@@ -154,11 +154,6 @@ export const neonFilesStep: Step = {
   },
 };
 
-/** Trusted origins for Neon Auth redirects: production and every preview URL of the Vercel team. */
-export function trustedDomains(slug: string, scope: string): string[] {
-  return [`https://${slug}.vercel.app`, `https://*-${scope}.vercel.app`];
-}
-
 function authArgs(ctx: Context) {
   return [
     "--project-id",
@@ -172,58 +167,54 @@ function authArgs(ctx: Context) {
 
 function authState(ctx: Context) {
   const neon = (args: string[]) => ctx.cli.neon([...args, ...authArgs(ctx)]);
+  // Not configured yet = a non-JSON message ("Neon Auth is not configured for this branch") or an error.
   let enabled = false;
   try {
-    enabled = Boolean(parseJson<{ base_url?: string }>(neon(["neon-auth", "status"]), "neon-auth status").base_url);
+    enabled = Boolean((JSON.parse(neon(["neon-auth", "status"])) as { base_url?: string }).base_url);
   } catch (error) {
-    if (!(error instanceof CliError)) throw error;
+    if (!(error instanceof CliError || error instanceof SyntaxError)) throw error;
   }
-  if (!enabled) return { enabled, providers: new Set<string>(), domains: new Set<string>(), localhost: false };
+  if (!enabled) return { enabled, providers: new Set<string>(), localhost: false };
   const providers = new Set(
     parseJson<{ id: string }[]>(neon(["neon-auth", "oauth-provider", "list"]), "oauth-provider list").map((p) => p.id),
-  );
-  const domains = new Set(
-    parseJson<(string | { domain: string })[]>(neon(["neon-auth", "domain", "list"]), "domain list").map((d) =>
-      typeof d === "string" ? d : d.domain,
-    ),
   );
   const localhost = parseJson<{ allow_localhost: boolean }>(
     neon(["neon-auth", "domain", "allow-localhost", "get"]),
     "allow-localhost get",
   ).allow_localhost;
-  return { enabled, providers, domains, localhost };
+  return { enabled, providers, localhost };
 }
 
 /**
  * Configures Neon Auth on the production branch BEFORE any other branch exists: branches copy
  * their parent's auth config. Localhost stays allowed because CI and `pnpm db:test` branch from
- * production and run the app on localhost.
+ * production and run the app on localhost. Deployed URLs are trusted at build time instead
+ * (scripts/vercel-build.ts): Vercel hostnames can't be matched by a Neon wildcard.
  */
 export const neonAuthStep: Step = {
   id: "neon-auth",
-  title: "Neon Auth on production (providers, trusted domains)",
+  title: "Neon Auth on production (enabled, providers, localhost)",
   skip: (ctx) => (ctx.opts.auth ? false : "no auth"),
   isDone(ctx) {
     const state = authState(ctx);
-    return (
-      state.enabled &&
-      state.localhost &&
-      ctx.opts.providers.every((p) => state.providers.has(p)) &&
-      trustedDomains(ctx.opts.slug, ctx.opts.scope).every((d) => state.domains.has(d))
-    );
+    return state.enabled && state.localhost && ctx.opts.providers.every((p) => state.providers.has(p));
   },
   run(ctx) {
     const neon = (args: string[]) => ctx.cli.neon([...args, ...authArgs(ctx)]);
     let state = authState(ctx);
     if (!state.enabled) {
-      neon(["neon-auth", "enable"]);
+      // The integration (`--meta auth=true`) turns auth on a few seconds after creating the project.
+      // Wait for it rather than racing it; enable it ourselves only if it never shows up.
+      try {
+        waitFor(() => authState(ctx).enabled, { timeoutMs: 90_000, what: "Neon Auth from the integration" });
+      } catch {
+        neon(["neon-auth", "enable"]);
+      }
       state = authState(ctx);
+      if (!state.enabled) throw new Error("Neon Auth is still not enabled on the production branch.");
     }
     for (const provider of ctx.opts.providers) {
       if (!state.providers.has(provider)) neon(["neon-auth", "oauth-provider", "add", "--provider-id", provider]);
-    }
-    for (const domain of trustedDomains(ctx.opts.slug, ctx.opts.scope)) {
-      if (!state.domains.has(domain)) neon(["neon-auth", "domain", "add", domain]);
     }
     if (!state.localhost) neon(["neon-auth", "domain", "allow-localhost", "enable"]);
   },

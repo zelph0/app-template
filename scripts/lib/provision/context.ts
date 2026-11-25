@@ -4,6 +4,8 @@ import type { ProvisionOptions } from "./options";
 /** Branch the provisioning commit lives on; becomes the app's first PR. */
 export const WORK_BRANCH = "chore/provision";
 export const ACTIONS_CREDENTIAL_NAME = (slug: string) => `${slug} GitHub Actions`;
+/** Name of the Neon key Vercel builds use to trust their own URL in Neon Auth. */
+export const BUILDS_CREDENTIAL_NAME = (slug: string) => `${slug} Vercel builds`;
 
 export type Resolved = ProvisionOptions & { owner: string; template: string; scope: string; teamId: string };
 

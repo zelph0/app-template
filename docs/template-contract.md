@@ -107,8 +107,10 @@ steps, never shipped in the base. Where they go:
 | GitHub ruleset | `protect-main`: PR required; checks `checks`, `secret scan`, `db-e2e (auth)`, `db-e2e (noauth)` | provisioning |
 | Vercel env | `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `NEON_AUTH_BASE_URL` (production + per preview) | the Vercel-managed Neon integration |
 | Vercel env | `NEON_AUTH_COOKIE_SECRET` (production, preview) | provisioning |
+| Vercel env | `NEON_API_KEY` (production, preview; Neon key scoped to the project) | provisioning; used by `pnpm vercel-build` to trust the deployment's URL in Neon Auth |
 | Vercel env | `SENTRY_DSN`, `RESEND_API_KEY`, `EMAIL_FROM` (optional) | you, when the app needs them |
-| Neon Auth (production branch) | providers; trusted domains `https://<slug>.vercel.app` + `https://*-<team>.vercel.app`; localhost allowed (CI and local tests branch from it) | provisioning |
+| Neon Auth (production branch) | providers; localhost allowed (CI and local tests branch from it) | provisioning |
+| Neon Auth trusted domains | the deployment's own URLs, on its own branch (preview: `VERCEL_URL`, `VERCEL_BRANCH_URL`; production: `VERCEL_PROJECT_PRODUCTION_URL`) | `pnpm vercel-build`, every deploy |
 
 If a required check is renamed in `ci.yml`, update `REQUIRED_CHECKS` in
 `scripts/lib/provision/github.ts` (a unit test compares them).
@@ -130,8 +132,8 @@ the options.
 7. Set up Neon Auth on the production branch. This runs before any other branch exists, because
    branches copy their parent's auth config.
 8. Run `pnpm db:env`: creates the `dev` branch, writes `.env.local`, migrates and seeds.
-9. Set the Vercel `NEON_AUTH_COOKIE_SECRET`. Create the GitHub `production` environment,
-   variables, secrets, repo settings and ruleset (§5).
+9. Set the Vercel `NEON_AUTH_COOKIE_SECRET` and `NEON_API_KEY`. Create the GitHub `production`
+   environment, variables, secrets, repo settings and ruleset (§5).
 10. Run `typecheck`, `lint`, `test` and `build` in the new app.
 11. Commit, push, and open the first PR.
 

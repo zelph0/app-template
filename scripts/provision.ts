@@ -33,7 +33,7 @@ import {
 } from "./lib/provision/github";
 import { neonAuthStep, neonFilesStep, neonResourceStep } from "./lib/provision/neon";
 import { parseProvisionArgs, USAGE } from "./lib/provision/options";
-import { secretsStep, variablesStep } from "./lib/provision/secrets";
+import { secretsStep, variablesStep, vercelBuildKeyStep } from "./lib/provision/secrets";
 import { cookieSecretStep, vercelGitStep, vercelProjectStep } from "./lib/provision/vercel";
 
 /** In order: each step may rely on facts recorded by the ones before it. */
@@ -51,6 +51,7 @@ export const STEPS: Step[] = [
   neonAuthStep,
   devDatabaseStep,
   cookieSecretStep,
+  vercelBuildKeyStep,
   environmentStep,
   variablesStep,
   secretsStep,
