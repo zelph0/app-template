@@ -60,12 +60,12 @@ const BUILD_TARGETS = ["production", "preview"] as const;
 
 /**
  * NEON_API_KEY on Vercel (production + preview, sensitive): a key scoped to this Neon project that
- * `pnpm vercel-build` uses to trust each deployment's URL in its branch's Neon Auth.
+ * `pnpm vercel-build` uses to check a preview isn't on the production database, and to trust each
+ * deployment's URL in its branch's Neon Auth.
  */
 export const vercelBuildKeyStep: Step = {
   id: "vercel-build-key",
-  title: "NEON_API_KEY on Vercel (builds trust their own URL in Neon Auth)",
-  skip: (ctx) => (ctx.opts.auth ? false : "no auth"),
+  title: "NEON_API_KEY on Vercel (builds check their database and trust their URL)",
   isDone: (ctx) => {
     const targets = envTargets(ctx).get("NEON_API_KEY");
     return BUILD_TARGETS.every((t) => targets?.has(t));
