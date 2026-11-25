@@ -11,7 +11,9 @@ test.beforeAll(async () => {
   await resetTasks("a");
 });
 
-const item = (page: Page, title: string) => page.getByTestId("task-item").filter({ hasText: title });
+// Scoped to the visible list: React can briefly keep a hidden copy of the page in the DOM.
+const item = (page: Page, title: string) =>
+  page.getByRole("list", { name: "Tasks" }).getByTestId("task-item").filter({ hasText: title });
 
 test("empty state, create, validate, edit, complete, filter and delete", async ({ page }) => {
   test.skip(!canUseDatabase, "needs a resettable database (local or CI)");
