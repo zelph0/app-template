@@ -122,12 +122,13 @@ export const cookieSecretStep: Step = {
 };
 
 /** Returns the project's "Protection Bypass for Automation" secret, creating one if needed. */
+/** Vercel requires exactly 32 alphanumeric characters: 16 random bytes as hex. */
 export function ensureBypassSecret(ctx: Context): string {
   const existing = Object.entries(getVercelProject(ctx)?.protectionBypass ?? {}).find(
     ([, v]) => v.scope === "automation-bypass",
   );
   if (existing) return registerSecret(existing[0]);
-  const secret = registerSecret(randomBytes(24).toString("base64url").slice(0, 32));
+  const secret = registerSecret(randomBytes(16).toString("hex"));
   vercelApi(ctx, `/v1/projects/${ctx.opts.slug}/protection-bypass`, {
     method: "PATCH",
     body: { generate: { secret, note: "GitHub Actions: e2e against previews" } },
