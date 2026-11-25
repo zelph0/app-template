@@ -79,7 +79,7 @@
   --muted-foreground: oklch(0.72 0.012 260);
   --accent: oklch(0.3 0.02 260);
   --accent-foreground: oklch(0.96 0.004 260);
-  --destructive: oklch(0.7 0.19 22);
+  --destructive: oklch(0.74 0.17 22); /* lighter than light-mode red: passes on dialog footers too */
   --success: oklch(0.72 0.14 155);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 16%);

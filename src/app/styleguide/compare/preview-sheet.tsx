@@ -19,6 +19,7 @@ import {
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
 import { TasksEmptyState } from "@/features/tasks/components/empty-state";
 import { TaskFilterNav } from "@/features/tasks/components/task-filter";
 import { TaskForm } from "@/features/tasks/components/task-form";
@@ -58,7 +59,9 @@ const noop = () => {};
 
 /**
  * The app's real UI with sample data, rendered once per style candidate on /styleguide/compare.
- * Display only: buttons that would call server actions are wired to no-ops where possible.
+ * Task rows are inert: their edit/delete dialogs would portal out of the candidate's scope. The
+ * add-task form and the sign-in card stay live (they hit the dev database / Neon Auth) so focus
+ * and validation states can be tried; submit them only on purpose.
  */
 export function PreviewSheet({ id }: { id: string }) {
   const scope = useRef<HTMLDivElement>(null);
@@ -77,7 +80,7 @@ export function PreviewSheet({ id }: { id: string }) {
           mode="create"
           initialState={{ ok: false, error: "Check the highlighted field.", fieldErrors: { title: ["Add a title."] } }}
         />
-        <ul className="divide-y divide-border">
+        <ul className="divide-y divide-border" inert>
           {TASKS.map((task) => (
             // Ids feed element ids (checkbox labels): keep them unique across candidates.
             <TaskItem key={task.id} task={{ ...task, id: `${id}-${task.id}` }} onToggle={noop} onDelete={noop} />
@@ -97,6 +100,11 @@ export function PreviewSheet({ id }: { id: string }) {
           <Button variant="link">Link</Button>
           <Button disabled>Disabled</Button>
         </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button size="sm">Small</Button>
+          <Button>Default</Button>
+          <Button size="lg">Large</Button>
+        </div>
         <div className="flex flex-wrap gap-2">
           <Badge>Default</Badge>
           <Badge variant="secondary">Secondary</Badge>
@@ -106,18 +114,30 @@ export function PreviewSheet({ id }: { id: string }) {
         <FieldGroup>
           <Field>
             <FieldLabel htmlFor={field("name")}>Name</FieldLabel>
-            <Input id={field("name")} placeholder="Ada Lovelace" />
+            <Input id={field("name")} name="name" autoComplete="off" placeholder="Ada Lovelace…" />
             <FieldDescription>Helper text under the input.</FieldDescription>
           </Field>
           <Field data-invalid>
             <FieldLabel htmlFor={field("email")}>Email</FieldLabel>
             <Input
               id={field("email")}
+              name="email"
+              type="email"
+              autoComplete="off"
+              spellCheck={false}
               defaultValue="not-an-email"
               aria-invalid
               aria-describedby={field("email-error")}
             />
             <FieldError id={field("email-error")}>Enter a valid email address.</FieldError>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor={field("notes")}>Notes</FieldLabel>
+            <Textarea id={field("notes")} name="notes" placeholder="Longer text…" />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor={field("disabled")}>Disabled</FieldLabel>
+            <Input id={field("disabled")} disabled placeholder="Can't edit" />
           </Field>
           <Field orientation="horizontal">
             <Checkbox id={field("check")} defaultChecked />
@@ -160,7 +180,7 @@ export function PreviewSheet({ id }: { id: string }) {
                 </DialogFooter>
               </DialogContent>
             </Dialog>
-            <Button>Continue</Button>
+            <Button>Save summary</Button>
           </CardFooter>
         </Card>
       </Block>

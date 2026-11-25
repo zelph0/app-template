@@ -1,6 +1,6 @@
 # 0010: `/new-app` lives in the template; styles are compared before the first PR
 
-Date: 2026-11-25 · Status: accepted
+Date: 2026-11-24 · Status: accepted
 
 **Context.** Build step 3 wraps `pnpm provision` in a Claude Code skill: a few questions, then a
 style chosen from generated options. The spec puts the skill at user level so it runs from any
@@ -25,6 +25,10 @@ without touching the real theme.
   be restyled the same way later.
 - **Contrast is checked before anyone sees a candidate.** `pnpm style:check` runs axe per
   candidate in light and dark against `next dev`: no build, no test database.
+- **The candidate formats live in `docs/theming.md`**, which every app has, so an app can be
+  restyled later the same way. The skill points there instead of carrying its own copy.
+- **Sign-in buttons follow the providers.** `src/modules/auth/providers.ts` lists them;
+  provisioning writes it from `--providers`, so the page matches what Neon Auth enables.
 - **Not in step 3:** optional feature modules and custom domains. Each comes later as a module
   plus a provision flag.
 
@@ -35,3 +39,7 @@ without touching the real theme.
   `src/config/fonts.ts`.
 - `TaskForm` takes an `initialState` and `DialogContent` takes a portal `container`, both so the
   compare page can show a validation error and keep a dialog inside its scope.
+- The comparison covers the app's components but not the token swatches and type samples of
+  `/styleguide`; those are checked on `/styleguide` after a style is applied.
+- Checking dialogs (in `style:check` and the e2e axe tests) found that the default dark red failed
+  contrast on dialog footers. It's now lighter (`oklch(0.74 0.17 22)`).

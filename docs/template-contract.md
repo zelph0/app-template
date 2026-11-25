@@ -59,6 +59,7 @@ removes it deterministically and is idempotent. CI runs every check in both vari
 | 9 | `tests/e2e/auth/`, `tests/unit/auth-*.test.ts` | Auth tests | deleted |
 | 10 | `.env.example`, `CLAUDE.md` | Auth env vars, auth docs | blocks removed |
 | 11 | `package.json` | `@neon/auth` dependency | removed |
+| 12 | `src/app/styleguide/compare/preview-sheet.tsx` | Sign-in card in the style comparison | block removed |
 
 Files 3–5b are one-line re-exports or wrappers: the code they point to lives in the module.
 
@@ -133,7 +134,9 @@ command.
 2. Create the `chore/provision` branch, run `pnpm install`, and record the options in
    `provision.json`.
 3. Write the app identity to `template.config.ts`, then run `pnpm template:sync`. Remove the
-   template-only files: `skills/` (the `/new-app` source) and `TEMPLATE_SPEC.md`.
+   template-only files: `skills/` (the `/new-app` source), `scripts/link-skill.ts` with its
+   `skill:link` script, and `TEMPLATE_SPEC.md`. With auth, write the chosen providers to
+   `src/modules/auth/providers.ts`: the sign-in buttons, matching what Neon Auth enables.
 4. With `--no-auth`: run `pnpm auth:remove`. With `--theme-dir`: copy the theme files.
 5. Create the Vercel project, link the folder, and connect the repo. Turn on GitHub deployment
    events (`gitProviderOptions.createDeployments`), which `e2e-preview.yml` listens for. The

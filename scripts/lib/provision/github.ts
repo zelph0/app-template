@@ -35,7 +35,7 @@ export function repoOfRemote(url: string): string | null {
   return match?.[1]?.toLowerCase() ?? null;
 }
 
-function isClone(ctx: Context): boolean {
+export function isClone(ctx: Context): boolean {
   if (!existsSync(join(ctx.appDir, ".git"))) return false;
   let url = "";
   if (!succeeds(() => (url = ctx.cli.git(["remote", "get-url", "origin"], { cwd: ctx.appDir })))) return false;

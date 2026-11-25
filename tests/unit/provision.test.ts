@@ -1,7 +1,7 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { type Cli, CliError, type RunOptions, redact, registerSecret } from "../../scripts/lib/cli";
-import { assertSameOptions } from "../../scripts/lib/provision/app";
+import { assertSameOptions, renderProviders, TEMPLATE_ONLY } from "../../scripts/lib/provision/app";
 import { type Context, runSteps, type Step } from "../../scripts/lib/provision/context";
 import { REQUIRED_CHECKS, repoOfRemote } from "../../scripts/lib/provision/github";
 import { connectionBody, isWantedConnection, renderMcpJson, renderNeonProject } from "../../scripts/lib/provision/neon";
@@ -356,5 +356,21 @@ describe("style candidates", () => {
     for (const [name, contents] of Object.entries(EMPTY_CANDIDATE_FILES)) {
       expect(readFileSync(`${CANDIDATES_DIR}/${name}`, "utf8"), `${name}: run pnpm style:reset`).toBe(contents);
     }
+  });
+});
+
+describe("auth providers file", () => {
+  const source = readFileSync("src/modules/auth/providers.ts", "utf8");
+  it("lists exactly the chosen providers, and is idempotent", () => {
+    const out = renderProviders(source, ["google", "github"]);
+    expect(out).toContain('export const socialProviders: SocialProvider[] = ["google", "github"];');
+    expect(renderProviders(out, ["google", "github"])).toBe(out);
+    expect(renderProviders(source, [])).toContain("export const socialProviders: SocialProvider[] = [];");
+  });
+});
+
+describe("template-only files", () => {
+  it("exist in the template, so provisioning has something to remove", () => {
+    for (const path of TEMPLATE_ONLY) expect(existsSync(path), path).toBe(true);
   });
 });
