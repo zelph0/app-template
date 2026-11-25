@@ -20,7 +20,7 @@ export default function CompareStylesPage() {
   return (
     <main id="main" className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-10">
       <header className="flex flex-col gap-2">
-        <h1 className="text-3xl">Compare styles</h1>
+        <h1 className="text-balance text-3xl">Compare styles</h1>
         <p className="text-muted-foreground">
           {candidates.length === 0
             ? "No candidates yet. The /new-app styling step writes them to src/styles/candidates/."

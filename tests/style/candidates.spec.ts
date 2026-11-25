@@ -18,7 +18,16 @@ for (const candidate of candidates) {
       const scope = page.locator(`[data-theme-preview="${candidate.id}"]`);
       await expect(scope).toBeVisible();
       await page.waitForLoadState("networkidle");
-      await expectNoSeriousA11yViolations(page, `[data-theme-preview="${candidate.id}"]`);
+      const selector = `[data-theme-preview="${candidate.id}"]`;
+      await expectNoSeriousA11yViolations(page, selector);
+
+      // Dialog surfaces (--popover, its footer) only exist while a dialog is open. It portals into the
+      // candidate's scope; check just the dialog, since the page behind the overlay is dimmed on purpose.
+      await scope.getByRole("button", { name: "Open dialog" }).click();
+      const dialog = scope.getByRole("dialog");
+      await expect(dialog).toBeVisible();
+      await expect(dialog).toHaveCSS("opacity", "1"); // let the open animation finish
+      await expectNoSeriousA11yViolations(page, `${selector} [data-slot="dialog-content"]`);
     });
   }
 }

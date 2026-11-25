@@ -71,15 +71,53 @@ export const identityStep: Step = {
   },
 };
 
-/** Files that only make sense in the template itself (the /new-app skill source, the build spec). */
-export const TEMPLATE_ONLY = ["skills", "TEMPLATE_SPEC.md"];
+/** Files that only make sense in the template itself (the /new-app skill and its linker, the build spec). */
+export const TEMPLATE_ONLY = ["skills", "scripts/link-skill.ts", "TEMPLATE_SPEC.md"];
+const TEMPLATE_ONLY_SCRIPTS = ["skill:link"];
+
+function packageScripts(ctx: Context): Record<string, string> {
+  return (
+    (JSON.parse(readFileSync(inApp(ctx, "package.json"), "utf8")) as { scripts?: Record<string, string> }).scripts ?? {}
+  );
+}
 
 export const templateOnlyStep: Step = {
   id: "template-only",
-  title: "Remove template-only files (skills/, TEMPLATE_SPEC.md)",
-  isDone: (ctx) => TEMPLATE_ONLY.every((path) => !existsSync(inApp(ctx, path))),
+  title: "Remove template-only files (skills/, skill:link, TEMPLATE_SPEC.md)",
+  isDone: (ctx) =>
+    TEMPLATE_ONLY.every((path) => !existsSync(inApp(ctx, path))) &&
+    TEMPLATE_ONLY_SCRIPTS.every((name) => !(name in packageScripts(ctx))),
   run(ctx) {
     for (const path of TEMPLATE_ONLY) rmSync(inApp(ctx, path), { recursive: true, force: true });
+    const file = inApp(ctx, "package.json");
+    const pkg = JSON.parse(readFileSync(file, "utf8")) as { scripts?: Record<string, string> };
+    for (const name of TEMPLATE_ONLY_SCRIPTS) delete pkg.scripts?.[name];
+    writeFileSync(file, `${JSON.stringify(pkg, null, 2)}\n`);
+  },
+};
+
+const PROVIDERS_FILE = "src/modules/auth/providers.ts";
+const PROVIDERS_LINE = /^export const socialProviders: SocialProvider\[\] = \[.*\];$/m;
+
+/** Pure: the providers file with its list set to `providers` (the sign-in buttons, in order). */
+export function renderProviders(source: string, providers: string[]): string {
+  if (!PROVIDERS_LINE.test(source)) throw new Error(`${PROVIDERS_FILE}: the socialProviders line has changed shape.`);
+  const list = providers.map((p) => `"${p}"`).join(", ");
+  return source.replace(PROVIDERS_LINE, `export const socialProviders: SocialProvider[] = [${list}];`);
+}
+
+/** The sign-in form shows exactly the providers enabled in Neon Auth. */
+export const authProvidersStep: Step = {
+  id: "auth-providers",
+  title: `Sign-in buttons (${PROVIDERS_FILE})`,
+  skip: (ctx) => (ctx.opts.auth ? false : "no auth"),
+  isDone(ctx) {
+    const source = readFileSync(inApp(ctx, PROVIDERS_FILE), "utf8");
+    return renderProviders(source, ctx.opts.providers) === source;
+  },
+  run(ctx) {
+    const file = inApp(ctx, PROVIDERS_FILE);
+    writeFileSync(file, renderProviders(readFileSync(file, "utf8"), ctx.opts.providers));
   },
 };
 

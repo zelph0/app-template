@@ -10,13 +10,17 @@ import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel, FieldSeparator } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { authClient } from "@/modules/auth/client";
+import { type SocialProvider, socialProviders } from "@/modules/auth/providers";
 
 const OTP_LENGTH = 6;
 const emailSchema = z.email("Enter a valid email address.");
 
 type Step = { kind: "email" } | { kind: "code"; email: string };
 
-/** Passwordless sign-in: email one-time code, or Google. New emails get an account automatically. */
+/**
+ * Passwordless sign-in: email one-time code, or a social provider from ./providers.ts.
+ * New emails get an account automatically.
+ */
 export function SignInForm({ next }: { next: string }) {
   const router = useRouter();
   const [step, setStep] = useState<Step>({ kind: "email" });
@@ -54,14 +58,14 @@ export function SignInForm({ next }: { next: string }) {
     });
   }
 
-  function google() {
+  function social(provider: SocialProvider) {
     setError(null);
     startTransition(async () => {
       const { error } = await authClient.signIn.social({
-        provider: "google",
+        provider,
         callbackURL: new URL(next, window.location.origin).toString(),
       });
-      if (error) setError(error.message ?? "Google sign-in is unavailable right now.");
+      if (error) setError(error.message ?? `${PROVIDERS[provider].label} sign-in is unavailable right now.`);
     });
   }
 
@@ -150,12 +154,46 @@ export function SignInForm({ next }: { next: string }) {
           </Button>
         </FieldGroup>
       </form>
-      <FieldSeparator>or</FieldSeparator>
-      <Button type="button" variant="outline" size="lg" disabled={pending} onClick={google}>
-        <GoogleMark />
-        Continue with Google
-      </Button>
+      {socialProviders.length > 0 && <FieldSeparator>or</FieldSeparator>}
+      {socialProviders.map((provider) => {
+        const { label, Mark } = PROVIDERS[provider];
+        return (
+          <Button
+            key={provider}
+            type="button"
+            variant="outline"
+            size="lg"
+            disabled={pending}
+            onClick={() => social(provider)}
+          >
+            <Mark />
+            Continue with {label}
+          </Button>
+        );
+      })}
     </div>
+  );
+}
+
+const PROVIDERS: Record<SocialProvider, { label: string; Mark: () => React.ReactNode }> = {
+  google: { label: "Google", Mark: GoogleMark },
+  github: { label: "GitHub", Mark: GitHubMark },
+  vercel: { label: "Vercel", Mark: VercelMark },
+};
+
+function GitHubMark() {
+  return (
+    <svg data-icon="inline-start" viewBox="0 0 24 24" aria-hidden="true" className="size-4 fill-current">
+      <path d="M12 .3a12 12 0 0 0-3.8 23.38c.6.12.82-.26.82-.57v-2c-3.34.73-4.04-1.6-4.04-1.6-.55-1.4-1.34-1.77-1.34-1.77-1.09-.74.08-.73.08-.73 1.2.09 1.84 1.24 1.84 1.24 1.07 1.83 2.8 1.3 3.49 1 .1-.78.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.13-.3-.54-1.52.12-3.18 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.28-1.55 3.29-1.23 3.29-1.23.66 1.66.25 2.88.12 3.18a4.65 4.65 0 0 1 1.23 3.22c0 4.61-2.8 5.63-5.48 5.92.43.37.81 1.1.81 2.22v3.29c0 .32.22.7.83.58A12 12 0 0 0 12 .3" />
+    </svg>
+  );
+}
+
+function VercelMark() {
+  return (
+    <svg data-icon="inline-start" viewBox="0 0 24 24" aria-hidden="true" className="size-4 fill-current">
+      <path d="M12 2 23 21H1z" />
+    </svg>
   );
 }
 

@@ -9,10 +9,12 @@
  * and `vercel` logins and pipes keys between them. `pnpm provision --help` for options;
  * `pnpm deprovision <slug>` undoes it. Contract: docs/template-contract.md.
  */
+import { existsSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createCli, parseJson } from "./lib/cli";
 import {
+  authProvidersStep,
   devDatabaseStep,
   identityStep,
   installStep,
@@ -27,6 +29,7 @@ import { type Context, type Logger, type Resolved, runSteps, type Step } from ".
 import {
   environmentStep,
   getRepo,
+  isClone,
   repoSettingsStep,
   repoStep,
   rulesetStep,
@@ -46,6 +49,7 @@ export const STEPS: Step[] = [
   optionsStep,
   identityStep,
   templateOnlyStep,
+  authProvidersStep,
   removeAuthStep,
   themeStep,
   vercelProjectStep,
@@ -112,6 +116,9 @@ function preflight(argv: string[]): Context {
   if (!templateRepo?.is_template)
     throw new Error(`${template} isn't a GitHub template repo (Settings → Template repository).`);
   checkExisting(ctx); // a same-named repo / Vercel project / Neon resource must be ours (an earlier run)
+  if (existsSync(ctx.appDir) && !isClone(ctx)) {
+    throw new Error(`${ctx.appDir} exists but isn't a clone of ${ctx.repo}. Move it or pass --dir.`);
+  }
   return ctx;
 }
 
@@ -161,7 +168,7 @@ function main() {
         "(`neon neon-auth oauth-provider update`); the shared one is for dev and previews (decision 0002).",
     );
   }
-  if (ctx.opts.json) console.info(JSON.stringify({ ...result, steps: outcomes }, null, 2));
+  if (ctx.opts.json) console.info(JSON.stringify({ ...result, steps: outcomes })); // one line: the last on stdout
 }
 
 const isMain = process.argv[1] && relative(process.cwd(), process.argv[1]).endsWith("scripts/provision.ts");
