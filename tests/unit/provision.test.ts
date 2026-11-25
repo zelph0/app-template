@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { type Cli, CliError, type RunOptions, redact, registerSecret } from "../../scripts/lib/cli";
 import { assertSameOptions, renderProviders, TEMPLATE_ONLY } from "../../scripts/lib/provision/app";
 import { type Context, runSteps, type Step } from "../../scripts/lib/provision/context";
-import { REQUIRED_CHECKS, repoOfRemote } from "../../scripts/lib/provision/github";
+import { missingGhScopes, REQUIRED_CHECKS, repoOfRemote } from "../../scripts/lib/provision/github";
 import { connectionBody, isWantedConnection, renderMcpJson, renderNeonProject } from "../../scripts/lib/provision/neon";
 import { parseProvisionArgs, titleFromSlug } from "../../scripts/lib/provision/options";
 import { assertOwnership } from "../../scripts/lib/provision/ownership";
@@ -456,5 +456,17 @@ describe("auth providers file", () => {
 describe.skipIf(existsSync("provision.json"))("template-only files", () => {
   it("exist in the template, so provisioning has something to remove", () => {
     for (const path of TEMPLATE_ONLY) expect(existsSync(path), path).toBe(true);
+  });
+});
+
+describe("missingGhScopes", () => {
+  it("names the scopes the gh token lacks", () => {
+    expect(missingGhScopes("HTTP/2.0 200 OK\r\nX-Oauth-Scopes: gist, read:org, repo\r\n\r\n{}")).toEqual(["workflow"]);
+  });
+  it("is satisfied when repo and workflow are granted", () => {
+    expect(missingGhScopes("X-Oauth-Scopes: repo, workflow, gist\n\n{}")).toEqual([]);
+  });
+  it("can't tell without the header (fine-grained tokens), so reports nothing", () => {
+    expect(missingGhScopes("HTTP/2.0 200 OK\n\n{}")).toEqual([]);
   });
 });

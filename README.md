@@ -13,7 +13,7 @@ Playwright · Biome · pnpm. The reasons behind each choice are in [`docs/decisi
 |---|---|---|
 | 1. This template | The base app, tests, CI and Claude Code setup | ✅ Done |
 | 2. Provisioning script | One command that creates a new app: GitHub repo, Neon database, Vercel project, secrets | ✅ Built (`pnpm provision`) |
-| 3. `/new-app` skill | Claude asks you a few questions (name, sign-in, style), shows style options, runs the script | ✅ Built (`/new-app`) |
+| 3. `/new-app` skill | Claude helps you write a brief, asks about sign-in and style, lets you switch between style options on an example screen, runs the script | ✅ Built (`/new-app`) |
 
 So today you can **work on the template** and **create a new app** by typing `/new-app` in Claude
 Code (see below).
@@ -65,10 +65,13 @@ Code (see below).
 One-time logins (the script never asks for passwords or keys; it reads them from these CLIs):
 
 ```bash
-gh auth login
+gh auth login --scopes workflow
 pnpm exec neon login
 pnpm exec vercel login
 ```
+
+Already logged in to `gh` without `workflow`? `gh auth refresh -h github.com -s repo,workflow`
+adds it. It lets pushes change `.github/workflows/`, and `/install-github-app` needs it.
 
 Also once: give the [Vercel GitHub app](https://github.com/apps/vercel/installations/new) access to
 "All repositories", so new repos can be connected without a browser. Then make `/new-app` available
@@ -80,11 +83,17 @@ pnpm skill:link
 
 Then type **`/new-app`** in Claude Code, from any folder. Claude asks for:
 - a name and a sentence about the app;
-- the sign-in you want;
-- the look you're after (a vibe, optional colours, optional example sites).
+- the look you're after (a vibe, optional colours, optional example sites);
+- what the app is for, as a short **brief**: Claude drafts it from your sentence and asks a few
+  multiple-choice questions (who uses it, which features come first, phone or desktop). It
+  becomes `docs/brief.md` in the app; the blank form in [`docs/brief.md`](docs/brief.md)
+  explains each part. You can also fill a copy in beforehand and paste it;
+- the sign-in you want.
 
-It creates the app, then shows 3–4 style options side by side on the app's real screens. You pick
-one (or a mix, or ask for another round), and it opens the app's first PR with that style.
+It creates the app, then opens a **style switcher** in the browser: one example screen of the
+app, with a button per style option (keys 1–4 work too), so you can flip between them and watch
+the same screen change, in light and dark. You pick one (or a mix, or ask for another round),
+and it opens the app's first PR with that style and the brief.
 
 Under the hood it runs `pnpm provision`, which you can also run yourself:
 
@@ -112,7 +121,25 @@ production database and deploys the site. Useful options (`pnpm provision --help
 
 If it stops halfway, fix what it says and run the **same command** again: it skips what's done.
 (Changing options like `--no-auth` on a re-run is refused; the app remembers them in `provision.json`.)
-Afterwards, open the app in Claude Code and run `/install-github-app` once (for `@claude` in PRs).
+
+### What `/new-app` does, step by step, and why
+
+| Step | What happens | Why it's needed |
+|---|---|---|
+| 0. Check the template | Makes sure this folder is on an up-to-date `main` | New apps copy GitHub's `main`; the scripts run from this folder. Both must match |
+| 1. Questions and brief | Name, style, brief, sign-in, visibility. Then a *preflight*: checks your logins and that the name is free | Settles everything up front, so nothing is created and then thrown away |
+| 2. Provision | Creates the GitHub repo from this template, the Vercel project, the Neon database (`main`, `dev`, `test`), sign-in, secrets, `main` protection. Builds `main` once as production. Clones the app next to this folder and runs every check | The wiring that makes "merge a PR → live site" work. It's repeatable: a re-run skips finished steps |
+| 3. Brief and style | Writes `docs/brief.md`. Generates 3–4 styles, checks each for contrast (axe), shows the switcher, applies the one you pick, removes the rest | The brief tells every later session what the app is for. Contrast is checked before you see anything, so every option is usable |
+| 4. First PR | Re-runs the same command without `--no-pr`: commits, pushes, opens the PR | CI and a preview test the styled app before anything reaches production |
+| 5. You merge | The deploy workflow migrates production, then deploys it | Production only changes through a merged, green PR |
+
+Afterwards, run `/install-github-app` once from Claude Code started **in the app's folder** (for
+`@claude` in PRs). It adds a `CLAUDE_CODE_OAUTH_TOKEN` secret; the workflow file is already there.
+If it pushes an `add-claude-github-actions-…` branch, you don't need that PR: delete the branch.
+If you chose Google or GitHub sign-in, give production its own OAuth client before real users.
+
+Every change after that follows [`docs/shipping-a-change.md`](docs/shipping-a-change.md): what
+happens at each stage, and what you can check in GitHub, Vercel and Neon along the way.
 
 To delete an app completely (repo, Vercel project, database): `pnpm deprovision my-app`. It shows
 what it will delete and asks you to type the name first. This can't be undone.
@@ -177,7 +204,7 @@ pnpm db:test && pnpm test && pnpm test:integration && pnpm test:e2e
 
 ## Day-to-day
 
-- **Building a feature:** ask Claude. It writes a short spec in `docs/specs/`, then copies the
+- **Building a feature:** ask Claude. It reads `docs/brief.md`, writes a short spec in `docs/specs/`, then copies the
   shape of `src/features/tasks/`: validation, database access scoped to the signed-in user,
   the page with loading, empty and error states, and tests.
 - **Changing the database:** Claude uses the `migrate` skill. It writes a migration file,
@@ -187,6 +214,8 @@ pnpm db:test && pnpm test && pnpm test:integration && pnpm test:e2e
   <http://localhost:3000/styleguide> in light and dark mode. Details: [`docs/theming.md`](docs/theming.md).
 - **Before a PR:** ask Claude to run the `reviewer` agent, then open the PR. The template asks
   for the commands you ran and screenshots.
+- **From PR to production:** [`docs/shipping-a-change.md`](docs/shipping-a-change.md) walks
+  through each stage and what to check.
 
 ### Commands
 
@@ -206,7 +235,7 @@ pnpm db:test && pnpm test && pnpm test:integration && pnpm test:e2e
 | `pnpm provision <slug>` | Create a new app from this template (see above) |
 | `pnpm deprovision <slug>` | Delete an app's repo, Vercel project and database (asks first) |
 | `pnpm skill:link` | Make `/new-app` available in every Claude Code session on this computer |
-| `pnpm style:check` / `pnpm style:reset` | Check / remove style options on `/styleguide/compare` (see `docs/theming.md`) |
+| `pnpm style:check` / `pnpm style:reset` | Check / remove style options shown on `/styleguide/compare` (see `docs/theming.md`) |
 
 ### Where things live
 
@@ -215,6 +244,7 @@ pnpm db:test && pnpm test && pnpm test:integration && pnpm test:e2e
 | `src/features/tasks/` | **The example feature.** New features copy its shape |
 | `src/modules/auth/` | All sign-in code, in one removable folder |
 | `src/styles/theme.css`, `src/config/fonts.ts` | The app's look |
+| `docs/brief.md` | What the app is for: who, features, data, quality requirements, build order |
 | `template.config.ts` | App name, short name and description (the only place they're set) |
 | `prisma/` | Database schema, migrations and sample data |
 | `tests/` | `unit/`, `integration/` and `e2e/` tests |
@@ -236,3 +266,6 @@ pnpm db:test && pnpm test && pnpm test:integration && pnpm test:e2e
 | Prisma suggests upgrading to 8 | Ignore it. Prisma is pinned to 7 on purpose ([decision 0001](docs/decisions/0001-prisma-7-pin.md)) |
 | A PR can't merge | A check failed. Open the PR's **Checks** tab, or ask Claude to fix CI |
 | Sample tasks don't show after signing in | They belong to the demo user. See `SEED_USER_EMAIL` above |
+| `/install-github-app` fails with a "workflow" scope error | `gh auth refresh -h github.com -s repo,workflow`, then run it again |
+| A new app's first PR shows a failed **Production** Vercel deploy | Push an empty commit to the PR (`git commit --allow-empty -m "chore: redeploy preview"`). New apps avoid it ([decision 0011](docs/decisions/0011-first-production-deploy-before-the-pr.md)) |
+| Neon lists `preview/…` branches with no open PR | Deleted automatically when a PR closes or its branch is deleted. An older leftover is safe to delete in the Neon console |

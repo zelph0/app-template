@@ -25,35 +25,8 @@ import { TaskFilterNav } from "@/features/tasks/components/task-filter";
 import { TaskForm } from "@/features/tasks/components/task-form";
 import { TaskItem } from "@/features/tasks/components/task-item";
 import { TaskListSkeleton } from "@/features/tasks/components/task-list-skeleton";
-import type { TaskDTO } from "@/features/tasks/types";
 import { SignInForm } from "@/modules/auth/components/sign-in-form"; // @auth-module
-
-const TASKS: TaskDTO[] = [
-  {
-    id: "preview-1",
-    title: "Draft the launch announcement",
-    notes: "Keep it under 200 words.",
-    done: false,
-    dueDate: "2026-12-04",
-    createdAt: "2026-11-20T09:00:00.000Z",
-  },
-  {
-    id: "preview-2",
-    title: "Book the venue",
-    notes: null,
-    done: true,
-    dueDate: null,
-    createdAt: "2026-11-18T09:00:00.000Z",
-  },
-  {
-    id: "preview-3",
-    title: "A much longer task title that wraps onto a second line so you can judge the line height",
-    notes: null,
-    done: false,
-    dueDate: "2026-11-01",
-    createdAt: "2026-11-10T09:00:00.000Z",
-  },
-];
+import { SAMPLE_TASKS } from "./sample-data";
 
 const noop = () => {};
 
@@ -81,7 +54,7 @@ export function PreviewSheet({ id }: { id: string }) {
           initialState={{ ok: false, error: "Check the highlighted field.", fieldErrors: { title: ["Add a title."] } }}
         />
         <ul className="divide-y divide-border" inert>
-          {TASKS.map((task) => (
+          {SAMPLE_TASKS.map((task) => (
             // Ids feed element ids (checkbox labels): keep them unique across candidates.
             <TaskItem key={task.id} task={{ ...task, id: `${id}-${task.id}` }} onToggle={noop} onDelete={noop} />
           ))}

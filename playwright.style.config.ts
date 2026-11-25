@@ -1,7 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
 /**
- * `pnpm style:check`: axe (contrast included) on every style candidate on /styleguide/compare, in
+ * `pnpm style:check`: axe (contrast included) on every style candidate on /styleguide/compare (and side-by-side), in
  * light and dark. Runs against `next dev` with STYLE_PREVIEW=1: no build, no test database.
  * STYLE_BASE_URL reuses a preview server that's already running (one `next dev` per folder).
  */
@@ -18,7 +18,7 @@ export default defineConfig({
     ? undefined
     : {
         command: `pnpm dev --port ${PORT}`,
-        url: `${baseURL}/styleguide/compare`,
+        url: `${baseURL}/styleguide/compare/side-by-side`,
         reuseExistingServer: false,
         timeout: 180_000,
         env: { STYLE_PREVIEW: "1" },

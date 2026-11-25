@@ -30,6 +30,8 @@ import {
   environmentStep,
   getRepo,
   isClone,
+  missingGhScopes,
+  REQUIRED_GH_SCOPES,
   repoSettingsStep,
   repoStep,
   rulesetStep,
@@ -96,6 +98,13 @@ function preflight(argv: string[]): Context {
     }
   };
   const ghUser = need("GitHub", "gh auth login", () => cli.gh(["api", "user", "--jq", ".login"]));
+  const missingScopes = missingGhScopes(cli.gh(["api", "-i", "user"]));
+  if (missingScopes.length > 0) {
+    throw new Error(
+      `Your GitHub login lacks the ${missingScopes.join(", ")} scope (needed to push workflow files and for ` +
+        `/install-github-app). Run \`gh auth refresh -h github.com -s ${REQUIRED_GH_SCOPES.join(",")}\` once, then re-run.`,
+    );
+  }
   need("Neon", "pnpm exec neon login", () => cli.neon(["me", "--output", "json"]));
   type Whoami = { team?: { id: string; slug: string }; teams?: { id: string; slug: string }[] };
   const whoami = need("Vercel", "pnpm exec vercel login", () =>
