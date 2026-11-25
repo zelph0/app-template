@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { succeeds } from "../cli";
 import { renderTemplateConfig } from "../template-config";
 import { type Context, type Step, WORK_BRANCH } from "./context";
+import { findPr } from "./github";
 
 const inApp = (ctx: Context, path: string) => join(ctx.appDir, path);
 const pnpm = (ctx: Context, args: string[]) => ctx.cli.pnpm(args, { cwd: ctx.appDir, inherit: true });
@@ -157,26 +158,6 @@ export const verifyStep: Step = {
 
 const git = (ctx: Context, args: string[]) => ctx.cli.git(args, { cwd: ctx.appDir });
 
-/**
- * The work branch's PR in one of `states`. isDone accepts open or merged (a closed-unmerged PR
- * doesn't count); run only reuses an open one, so changes made after a merge get a new PR.
- */
-function findPr(ctx: Context, states = ["OPEN", "MERGED"]): string | null {
-  const out = ctx.cli.gh([
-    "pr",
-    "list",
-    "-R",
-    ctx.repo,
-    "--head",
-    WORK_BRANCH,
-    "--state",
-    "all",
-    "--json",
-    "url,state",
-  ]);
-  return (JSON.parse(out) as { url: string; state: string }[]).find((p) => states.includes(p.state))?.url ?? null;
-}
-
 export function prBody(ctx: Context): string {
   const f = ctx.facts;
   return [
@@ -200,22 +181,40 @@ export function prBody(ctx: Context): string {
 
 export const pullRequestStep: Step = {
   id: "pull-request",
-  title: "Commit, push and open the first PR",
+  title: "Commit, push and open the PR",
   skip: (ctx) => (ctx.opts.pr ? false : "--no-pr"),
   isDone(ctx) {
     const url = findPr(ctx);
     if (url) ctx.facts.prUrl = url;
-    const clean = git(ctx, ["status", "--porcelain"]) === "";
+    if (url === null || git(ctx, ["status", "--porcelain"]) !== "") return false;
+    git(ctx, ["fetch", "--prune", "origin"]);
     const pushed = succeeds(() => git(ctx, ["rev-parse", "--verify", `refs/remotes/origin/${WORK_BRANCH}`]))
       ? git(ctx, ["rev-list", "--count", `origin/${WORK_BRANCH}..HEAD`]) === "0"
       : false;
-    return url !== null && clean && pushed;
+    const sameAsMain = succeeds(() => git(ctx, ["diff", "--quiet", "origin/main", "HEAD"]));
+    if (findPr(ctx, ["OPEN"])) {
+      // An open PR must also contain main, or GitHub can't build its merge ref and CI never runs.
+      return pushed && succeeds(() => git(ctx, ["merge-base", "--is-ancestor", "origin/main", "HEAD"]));
+    }
+    return sameAsMain; // merged, and nothing new since
   },
   run(ctx) {
     if (git(ctx, ["status", "--porcelain"]) !== "") {
       git(ctx, ["add", "-A"]);
       git(ctx, ["commit", "-m", `chore: provision ${ctx.opts.slug}`]);
     }
+    // After a squash merge, main has the same changes as new commits. Merging it resolves cleanly
+    // and keeps the next PR mergeable, without rewriting history.
+    git(ctx, ["fetch", "--prune", "origin"]);
+    try {
+      git(ctx, ["merge", "--no-edit", "origin/main"]);
+    } catch (error) {
+      succeeds(() => git(ctx, ["merge", "--abort"]));
+      throw new Error(
+        `Merging origin/main into ${WORK_BRANCH} conflicts; resolve it by hand.\n${(error as Error).message}`,
+      );
+    }
+    if (succeeds(() => git(ctx, ["diff", "--quiet", "origin/main", "HEAD"]))) return; // nothing new
     git(ctx, ["push", "-u", "origin", WORK_BRANCH]);
     const existing = findPr(ctx, ["OPEN"]);
     ctx.facts.prUrl =

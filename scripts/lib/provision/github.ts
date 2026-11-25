@@ -98,17 +98,65 @@ function cancelTemplateCommitRuns(ctx: Context) {
 
 const currentBranch = (ctx: Context) => ctx.cli.git(["rev-parse", "--abbrev-ref", "HEAD"], { cwd: ctx.appDir });
 
+/**
+ * The work branch's PR in one of `states` (GitHub: OPEN, MERGED, CLOSED). A closed-unmerged PR never
+ * counts, so a re-run opens a new one.
+ */
+export function findPr(ctx: Context, states = ["OPEN", "MERGED"]): string | null {
+  const out = ctx.cli.gh([
+    "pr",
+    "list",
+    "-R",
+    ctx.repo,
+    "--head",
+    WORK_BRANCH,
+    "--state",
+    "all",
+    "--json",
+    "url,state",
+  ]);
+  return (JSON.parse(out) as { url: string; state: string }[]).find((p) => states.includes(p.state))?.url ?? null;
+}
+
+/**
+ * The work branch after its PR was merged (squash): main holds those changes as one new commit, so
+ * the old branch can't be built on without conflicts. It's rebuilt from origin/main instead.
+ */
+function isStaleAfterMerge(ctx: Context): boolean {
+  const git = (args: string[]) => ctx.cli.git(args, { cwd: ctx.appDir });
+  if (!succeeds(() => git(["rev-parse", "--verify", `refs/heads/${WORK_BRANCH}`]))) return false;
+  if (findPr(ctx, ["OPEN"]) || !findPr(ctx, ["MERGED"])) return false;
+  return !succeeds(() => git(["merge-base", "--is-ancestor", "origin/main", WORK_BRANCH]));
+}
+
 export const workBranchStep: Step = {
   id: "work-branch",
   title: `Work branch ${WORK_BRANCH}`,
-  isDone: (ctx) => currentBranch(ctx) === WORK_BRANCH,
+  isDone(ctx) {
+    if (currentBranch(ctx) !== WORK_BRANCH) return false;
+    ctx.cli.git(["fetch", "--prune", "origin"], { cwd: ctx.appDir });
+    return !isStaleAfterMerge(ctx);
+  },
   run(ctx) {
     const git = (args: string[]) => ctx.cli.git(args, { cwd: ctx.appDir });
-    git(["fetch", "origin"]);
+    git(["fetch", "--prune", "origin"]);
+    if (isStaleAfterMerge(ctx)) {
+      // Only when nothing would be lost: the old branch's content must equal what was merged.
+      const clean = git(["status", "--porcelain"]) === "";
+      const merged = succeeds(() => git(["diff", "--quiet", "origin/main", WORK_BRANCH]));
+      if (!clean || !merged) {
+        throw new Error(
+          `${WORK_BRANCH} has changes that aren't in main, but its PR was already merged. Move them to a ` +
+            `new branch and PR by hand, then delete ${WORK_BRANCH} locally and re-run.`,
+        );
+      }
+      git(["switch", "-C", WORK_BRANCH, "origin/main"]);
+      return;
+    }
     const local = succeeds(() => git(["rev-parse", "--verify", `refs/heads/${WORK_BRANCH}`]));
     const remote = succeeds(() => git(["rev-parse", "--verify", `refs/remotes/origin/${WORK_BRANCH}`]));
     if (local || remote) git(["switch", WORK_BRANCH]);
-    else git(["switch", "-c", WORK_BRANCH]);
+    else git(["switch", "-c", WORK_BRANCH, "origin/main"]);
   },
 };
 
