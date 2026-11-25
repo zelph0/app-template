@@ -20,7 +20,8 @@ Next.js 16 (App Router, Cache Components) · Prisma 7 on Neon · Neon Auth · Ta
 
 `schema.ts` (Zod) → `data.ts` (owner-scoped Prisma) → `queries.ts` (cached reads) →
 `actions.ts` (server actions) → `components/` → `src/app/(app)/<feature>/{page,loading,error}.tsx`
-→ tests in `tests/{unit,integration,e2e}`. Write a spec in `docs/specs/<feature>.md` first.
+→ tests in `tests/{unit,integration,e2e}`. Read `docs/brief.md` (what the app is for), then write
+a spec in `docs/specs/<feature>.md` first. If a change alters the brief, update it in the same PR.
 
 - **Authorization:** get the user with `requireViewer()` from `@/lib/viewer`. Filter every query by `ownerId` in `data.ts`.
   Never accept an owner id from the client. Add a user-A-vs-user-B test.

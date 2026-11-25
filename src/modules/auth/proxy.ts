@@ -9,6 +9,7 @@ export const PUBLIC_ROUTES = [
   "/",
   "/styleguide",
   "/styleguide/compare",
+  "/styleguide/compare/side-by-side",
   "/api/health",
   "/opengraph-image",
   "/robots.txt",

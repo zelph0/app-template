@@ -1,18 +1,21 @@
 name: Clean up preview database
 
-# Deletes the PR's Neon preview branch when the PR closes (the Vercel-managed integration
-# otherwise keeps it until the deployment expires).
+# Deletes a git branch's Neon preview branch when its PR closes, or when the git branch is
+# deleted. Vercel deploys every pushed branch, PR or not (e.g. the branch /install-github-app
+# pushes), and the Vercel-managed integration otherwise keeps that database until the deployment
+# expires.
 
 on:
   pull_request:
     types: [closed]
+  delete:
 
 permissions:
   contents: read
 
 jobs:
   delete-preview-branch:
-    if: vars.NEON_PROJECT_ID != ''
+    if: vars.NEON_PROJECT_ID != '' && (github.event_name != 'delete' || github.event.ref_type == 'branch')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -21,4 +24,4 @@ jobs:
         with:
           project_id: ${{ vars.NEON_PROJECT_ID }}
           api_key: ${{ secrets.NEON_API_KEY }}
-          branch: preview/${{ github.head_ref }}
+          branch: preview/${{ github.event_name == 'delete' && github.event.ref || github.head_ref }}

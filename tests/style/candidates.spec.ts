@@ -4,7 +4,7 @@ import { expectNoSeriousA11yViolations } from "../e2e/support/a11y";
 
 /**
  * Every style candidate must pass axe (contrast included) in light and dark before anyone is
- * shown it. Run with `pnpm style:check`; fix or drop failing candidates.
+ * shown it: on the side-by-side component sheet and on the switcher's example app screen. Run with `pnpm style:check`; fix or drop failing candidates.
  */
 test("there are candidates to check", () => {
   expect(candidates.length, "src/styles/candidates/index.ts lists no candidates").toBeGreaterThan(0);
@@ -14,7 +14,7 @@ for (const candidate of candidates) {
   for (const colorScheme of ["light", "dark"] as const) {
     test(`${candidate.id.toUpperCase()}. ${candidate.name} (${colorScheme})`, async ({ page }) => {
       await page.emulateMedia({ colorScheme });
-      await page.goto("/styleguide/compare");
+      await page.goto("/styleguide/compare/side-by-side");
       const scope = page.locator(`[data-theme-preview="${candidate.id}"]`);
       await expect(scope).toBeVisible();
       await page.waitForLoadState("networkidle");
@@ -27,6 +27,17 @@ for (const candidate of candidates) {
       const dialog = scope.getByRole("dialog");
       await expect(dialog).toBeVisible();
       await expect(dialog).toHaveCSS("opacity", "1"); // let the open animation finish
+      await expectNoSeriousA11yViolations(page, `${selector} [data-slot="dialog-content"]`);
+
+      // The switcher's example app screen (what the user mostly looks at) in this candidate.
+      await page.goto(`/styleguide/compare#${candidate.id}`);
+      const screen = page.locator(selector);
+      await expect(screen.getByRole("heading", { name: "Tasks" })).toBeVisible();
+      await page.waitForLoadState("networkidle");
+      await expectNoSeriousA11yViolations(page, selector);
+      await screen.getByRole("button", { name: "Clear done" }).click();
+      const confirm = screen.getByRole("dialog");
+      await expect(confirm).toHaveCSS("opacity", "1");
       await expectNoSeriousA11yViolations(page, `${selector} [data-slot="dialog-content"]`);
     });
   }

@@ -59,7 +59,7 @@ removes it deterministically and is idempotent. CI runs every check in both vari
 | 9 | `tests/e2e/auth/`, `tests/unit/auth-*.test.ts` | Auth tests | deleted |
 | 10 | `.env.example`, `CLAUDE.md` | Auth env vars, auth docs | blocks removed |
 | 11 | `package.json` | `@neon/auth` dependency | removed |
-| 12 | `src/app/styleguide/compare/preview-sheet.tsx` | Sign-in card in the style comparison | block removed |
+| 12 | `src/app/styleguide/compare/preview-sheet.tsx`, `example-screen.tsx`, `style-switcher.tsx` | Sign-in card and sign-in screen in the style comparison | blocks removed |
 
 Files 3–5b are one-line re-exports or wrappers: the code they point to lives in the module.
 

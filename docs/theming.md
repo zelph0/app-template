@@ -24,15 +24,20 @@ in `src/app/globals.css` (`@theme inline`) and show it on `/styleguide`.
 
 ## Comparing styles
 
-`/styleguide/compare` renders the app's real components once per candidate:
-- the Tasks list in every state;
-- the task form with a validation error;
-- a dialog;
-- buttons, inputs and badges;
-- the sign-in card.
+`/styleguide/compare` is a **style switcher**: one example screen at a time, with a button per
+candidate plus "Current" (the app's own style), so you flip between styles and watch the same
+screen change. Keys 1–9 pick a candidate, 0 the current style, ← → step through; the URL hash
+(`#b`) keeps the pick. Three screens, all built from the app's real components:
+- **App screen** (`example-screen.tsx`): a believable app with a header, the Tasks page, a side
+  panel, an alert, a small form and a confirm dialog;
+- **Sign-in**: the sign-in page;
+- **Every component** (`preview-sheet.tsx`): the Tasks list in every state, the task form with a
+  validation error, a dialog, buttons, inputs, badges and the sign-in card.
 
-Each candidate sits in its own `[data-theme-preview="<id>"]` scope, so several render together
-without touching the real theme. The page is dev-only and 404s unless `STYLE_PREVIEW=1`.
+`/styleguide/compare/side-by-side` shows every candidate's component sheet at once.
+
+Each candidate renders in its own `[data-theme-preview="<id>"]` scope, so it never touches the
+real theme. Both pages are dev-only and 404 unless `STYLE_PREVIEW=1`.
 
 | File (`src/styles/candidates/`) | Holds |
 |---|---|
@@ -44,7 +49,8 @@ without touching the real theme. The page is dev-only and 404s unless `STYLE_PRE
 2. Run `STYLE_PREVIEW=1 pnpm dev --port 3200` and open `/styleguide/compare`. Use the theme switch
    in the header for light and dark.
 3. Run `STYLE_BASE_URL=http://localhost:3200 pnpm style:check`. It runs axe on each candidate in
-   light and dark; nobody should see a failing one.
+   light and dark, on the side-by-side sheet and the switcher's App screen, each with a dialog
+   open too; nobody should see a failing one.
 4. Apply the chosen candidate to `theme.css`, `fonts.ts` and the `cva` variants, then run
    `pnpm style:reset`. The folder's committed state is always empty, and a unit test fails CI
    otherwise.

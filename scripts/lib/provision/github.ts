@@ -30,6 +30,26 @@ export function assertOurRepo(ctx: Context, repo: RepoInfo) {
 }
 
 /** `owner/repo` of a GitHub remote URL (ssh or https), lowercased, or null. */
+/** gh token scopes the setup needs: `workflow` lets pushes (and /install-github-app) touch .github/workflows. */
+export const REQUIRED_GH_SCOPES = ["repo", "workflow"];
+
+/**
+ * Pure: which REQUIRED_GH_SCOPES the `X-OAuth-Scopes` header of `gh api -i user` lacks. No header
+ * (a fine-grained token or GH_TOKEN) means scopes can't be read, so nothing is reported missing.
+ */
+export function missingGhScopes(rawResponse: string): string[] {
+  const line = rawResponse.split(/\r?\n/).find((l) => /^x-oauth-scopes:/i.test(l));
+  if (!line) return [];
+  const granted = new Set(
+    line
+      .slice(line.indexOf(":") + 1)
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+  );
+  return REQUIRED_GH_SCOPES.filter((scope) => !granted.has(scope));
+}
+
 export function repoOfRemote(url: string): string | null {
   const match = url.trim().match(/github\.com[:/]([^/\s]+\/[^/\s]+?)(?:\.git)?\/?$/i);
   return match?.[1]?.toLowerCase() ?? null;

@@ -1,6 +1,6 @@
 ---
 name: new-app
-description: Create a new web app from the app-template, fully wired (GitHub repo, Vercel project, Neon database, auth, CI secrets) and with its own visual style picked from generated options. Runs only when the user types /new-app.
+description: Create a new web app from the app-template, fully wired (GitHub repo, Vercel project, Neon database, auth, CI secrets), with a written app brief (features and quality requirements) and its own visual style picked by switching between generated options on an example screen. Runs only when the user types /new-app.
 disable-model-invocation: true
 argument-hint: "[app name or one-line idea]"
 ---
@@ -39,12 +39,46 @@ Ask in plain chat first, because these are free text (use the command's argument
 - **Style**: the vibe in a few words, an optional colour palette (names or hex), optional
   reference URLs or screenshots. "No preference" is fine: you'll propose directions anyway.
 
+### Write the brief together
+
+Before any wiring, agree on what the app is for. It becomes `docs/brief.md` in the app (the
+template's copy is the blank form, with what each section means). Every later session reads it
+before planning a feature, and its build order becomes the first PRs. The user isn't expected to
+know system design, so **you do the drafting; they react**:
+
+1. **Draft the whole brief yourself** from their sentence, in the format of `$T/docs/brief.md`:
+   who it's for, 3–5 journeys, a feature table split into first version / later / not doing, the
+   things it stores, and only the quality rows that differ from the defaults. Keep the draft in
+   your scratchpad. If the user pasted a brief of their own, start from it and only fill gaps.
+2. **Show a short summary in chat**, not the file: the journeys, the first-version features, the
+   things it stores, and anything the template can't do yet. Plain words: no "NFR", "SLA",
+   "entity" or "scalability". Say "what it remembers", "who can see what", "how many people".
+3. **Ask one AskUserQuestion** (at most 4 questions, your best guess first and marked
+   recommended) about what changes the build most. Usually:
+   - **Who uses it**: "Just me" · "Me and people I share with" · "Anyone can sign up".
+     Sharing between users is extra work (the template scopes all data to one owner): say so.
+   - **First version** (multiSelect): the draft's candidate features.
+   - **Phone or desktop first**.
+   - **The biggest gap**, if there is one (reminders need notifications or background jobs,
+     neither in the template yet): "Later" · "First version, as extra work" · a simpler stand-in
+     (for reminders: due dates shown in the app).
+
+   Ask a second round only if the answers changed the plan a lot. Then confirm in one line.
+4. **Never promise** what the template lacks (see the optional features below): list it under
+   "What the template can't do yet" with the user's decision.
+
+The brief also informs the next questions (who uses it → sign-in) and the style (the audience).
+It's written into the app in step 3.
+
+### Sign-in and visibility
+
 Then one AskUserQuestion with the multiple-choice ones:
 
 - **Sign-in**: "Email code + Google" (recommended) · "Email code + Google + GitHub" ·
   "Email code only" · "No sign-in" (single owner, no accounts). Maps to `--providers google`,
   `--providers google,github`, `--providers none`, `--no-auth`. The sign-in page shows exactly
-  the chosen buttons.
+  the chosen buttons. "No sign-in" means anyone with the URL acts as the owner: only for apps
+  with nothing private in them, whatever the brief says about "just me".
 - **Repo visibility**: "Public" (recommended: GitHub only enforces the `main` protection on
   private repos on paid plans) · "Private" (`--private`).
 
@@ -57,10 +91,12 @@ Then check everything before creating anything:
 pnpm -s -C "$T" provision <slug> <flags> --preflight
 ```
 
-It verifies the `gh`, `neon` and `vercel` logins, that the slug is free (or belongs to an earlier
+It verifies the `gh`, `neon` and `vercel` logins (and that `gh` has the `workflow` scope, which
+`/install-github-app` needs later), that the slug is free (or belongs to an earlier
 run of this app), and that `../<slug>` next to the template is free or already this app's clone.
-If a login is missing, give the user the exact command it prints (`gh auth login`,
-`pnpm exec neon login`, `pnpm exec vercel login`) and wait. **Never ask for a password, token or
+If a login or scope is missing, give the user the exact command it prints (`gh auth login`,
+`gh auth refresh -h github.com -s repo,workflow`, `pnpm exec neon login`,
+`pnpm exec vercel login`) and wait. **Never ask for a password, token or
 key**: every secret moves between the CLIs without passing through you or the user.
 
 ## 2. Provision, without the PR yet
@@ -81,7 +117,12 @@ records them in `provision.json` and refuses changes.
 `--no-pr` leaves the app on its `chore/provision` branch with everything uncommitted, so the
 chosen style lands in the same first PR.
 
-## 3. Style the app: generate options, preview them, let the user choose
+## 3. Write the brief into the app, then style it
+
+First write the agreed brief to `<dir>/docs/brief.md` (replace the blank form; set `Status:
+agreed <date>`). It goes into the first PR with the style.
+
+### Style: generate options, preview them, let the user choose
 
 Read **"Comparing styles" in `<dir>/docs/theming.md`** now: it has the exact candidate file
 formats and how to apply one. Use the `frontend-design` skill for the aesthetic direction (it's
@@ -107,15 +148,19 @@ installed at user level for this step). All of this happens in the new app's fol
      changing fonts.
 3. **Show them.** Open `http://localhost:3200/styleguide/compare` in the browser pane with
    preview_start and that `url`. That only opens a tab. Don't use a named launch configuration:
-   those run from the session's own folder, not the new app. Each candidate renders the app's
-   real components:
-   - the Tasks list in every state;
-   - the task form with a validation error;
-   - a dialog;
-   - buttons, inputs and badges;
-   - the sign-in card.
+   those run from the session's own folder, not the new app. The page is a **style switcher**:
+   one example screen at a time, with a button per candidate (and "Current", the app's own
+   style), so the user flips between styles and watches the same screen change. Screens:
+   - **App screen**: a believable app (header, the Tasks page, a side panel with a card, an
+     alert, a small form and a confirm dialog);
+   - **Sign-in**: the sign-in page as a new visitor sees it;
+   - **Every component**: each component in every state (validation errors, empty, loading).
 
-   Take a screenshot in light and one in dark (theme switch in the header) so the user sees both,
+   Keys 1–9 pick a candidate, 0 the current style, ← → step through; the URL hash (`#b`) keeps
+   the pick. `/styleguide/compare/side-by-side` shows them all at once.
+
+   Tell the user they can click through it themselves in the browser pane (theme switch in the
+   header for dark). Take a screenshot of each candidate's App screen, in light and one in dark,
    and describe each direction in a line.
 4. **Ask** with AskUserQuestion: one option per direction, plus "Mix them" and "Another round".
    For a mix ("A's colours with C's shapes") or another round, write new candidates from the
@@ -150,9 +195,26 @@ Tell the user, in plain words:
   PR migrates production and deploys it.
 - What's left by hand:
   - Run `/install-github-app` in Claude Code inside the app, for `@claude` on PRs (no CLI can
-    fetch that token).
+    fetch that token). Start Claude Code in the app folder first (`cd <dir> && claude`, with the
+    real path, in a terminal or a new session). The app already has `.github/workflows/claude.yml`;
+    what the installer adds that matters is the `CLAUDE_CODE_OAUTH_TOKEN` secret. If it pushes an
+    `add-claude-github-actions-…` branch, the user can close the PR page it opens without
+    creating the PR, then delete that branch (`git push origin --delete <branch>`); deleting it
+    also deletes the preview database Vercel made for it.
   - With Google or GitHub sign-in: give production its own OAuth client before real users. The
     shared one is for dev and previews.
 - To throw the app away: `pnpm -C "$T" deprovision <slug>` (asks for confirmation; permanent).
 
 Don't merge the PR yourself; that's the user's call.
+
+## Known snags (seen on real runs)
+
+- **The PR's preview deploy says "Production" and fails.** A new Vercel project's first
+  deployment is always production, so provisioning builds `main` as production before pushing the
+  PR (`docs/decisions/0011-first-production-deploy-before-the-pr.md`). If an older app hits it,
+  push an empty commit to the PR branch (`git commit --allow-empty -m "chore: redeploy preview"`).
+- **`/install-github-app` fails with "workflow scope".** `gh auth refresh -h github.com -s
+  repo,workflow`, then run it again. Preflight now checks this.
+- **Leftover `preview/…` databases in Neon.** Each is deleted when its PR closes or its git branch
+  is deleted (`neon-cleanup.yml`). One left over from before that is safe to delete by hand
+  (never `main`, `dev` or `test`).
