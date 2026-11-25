@@ -6,7 +6,7 @@
  */
 import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { parse } from "dotenv";
 import { neonCli, neonJson, readNeonProject } from "./lib/neon";
 
@@ -52,6 +52,7 @@ const body = Object.entries(values)
 writeFileSync(ENV_FILE, `# Disposable Neon "${branch}" branch. Written by pnpm db:test. Never commit.\n${body}\n`, {
   mode: 0o600,
 });
+chmodSync(ENV_FILE, 0o600);
 
 const env = { ...process.env, ...values, DOTENV_CONFIG_PATH: ENV_FILE };
 console.info("Applying migrations…");

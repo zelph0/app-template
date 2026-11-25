@@ -6,7 +6,7 @@ Next.js 16 (App Router, Cache Components) · Prisma 7 on Neon · Neon Auth · Ta
 
 ## Commands
 
-- `pnpm dev`: app on the Neon `dev` branch (`.env.local`)
+- `pnpm dev`: app on the Neon `dev` branch (`.env.local`; `pnpm db:env` rewrites it, keeping custom values)
 - `pnpm typecheck` / `pnpm lint` (`lint:fix` to autofix): the Stop hook runs both
 - `pnpm test`: unit tests, no DB
 - `pnpm db:test`: reset the disposable `test` branch (migrate + seed), then:
