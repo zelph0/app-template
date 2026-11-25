@@ -8,6 +8,7 @@ import { connectionBody, isWantedConnection, renderMcpJson, renderNeonProject } 
 import { parseProvisionArgs, titleFromSlug } from "../../scripts/lib/provision/options";
 import { assertOwnership } from "../../scripts/lib/provision/ownership";
 import { secretsStep } from "../../scripts/lib/provision/secrets";
+import { deployHookRequest, firstProductionDeployStep, productionDeployment } from "../../scripts/lib/provision/vercel";
 import { CANDIDATES_DIR, EMPTY_CANDIDATE_FILES } from "../../scripts/lib/style-candidates";
 import { renderTemplateConfig } from "../../scripts/lib/template-config";
 import { assertPreviewDatabase, deploymentOrigins } from "../../scripts/vercel-build";
@@ -207,6 +208,7 @@ describe("secretsStep", () => {
       vercel: respond("vercel"),
       pnpm: respond("pnpm"),
       git: respond("git"),
+      curl: respond("curl"),
     };
     return { cli, calls };
   }
@@ -234,6 +236,86 @@ describe("secretsStep", () => {
     for (const call of calls) {
       for (const value of secretValues) expect(call.args.join(" ")).not.toContain(value);
     }
+  });
+});
+
+describe("first production deployment", () => {
+  const HOOK = "https://api.vercel.com/v1/integrations/deploy/prj_1/hook_first_prod";
+
+  it("classifies the project's production target", () => {
+    expect(productionDeployment(null)).toBe("none");
+    expect(productionDeployment({})).toBe("none");
+    expect(productionDeployment({ targets: {} })).toBe("none");
+    expect(productionDeployment({ targets: { production: null } })).toBe("none");
+    expect(productionDeployment({ targets: { production: { id: "d", readyState: "CANCELED" } } })).toBe("none");
+    for (const state of ["QUEUED", "INITIALIZING", "BUILDING", undefined]) {
+      expect(productionDeployment({ targets: { production: { id: "d", readyState: state } } })).toBe("building");
+    }
+    for (const state of ["READY", "ERROR"]) {
+      expect(productionDeployment({ targets: { production: { id: "d", readyState: state } } })).toBe("final");
+    }
+  });
+
+  it("builds a curl config for the hook, and refuses anything that isn't a Vercel hook URL", () => {
+    expect(deployHookRequest(HOOK)).toBe(`url = "${HOOK}"\n`);
+    expect(() => deployHookRequest(`${HOOK}" -o "/tmp/x`)).toThrow("doesn't look like");
+    expect(() => deployHookRequest("https://example.com/v1/integrations/deploy/prj_1/x")).toThrow();
+  });
+
+  type Call = { tool: string; args: string[]; options?: RunOptions };
+
+  /** A Vercel project whose production target goes through `states`, one per project read. */
+  function vercelCli(states: (string | null)[]) {
+    const calls: Call[] = [];
+    let reads = 0;
+    const respond = (tool: string) => (args: string[], options?: RunOptions) => {
+      calls.push({ tool, args, options });
+      const cmd = args.join(" ");
+      if (tool === "vercel" && cmd.startsWith("api /v9/projects/my-app")) {
+        const state = states[Math.min(reads++, states.length - 1)];
+        return JSON.stringify({
+          id: "prj_1",
+          targets: state ? { production: { id: "dpl_1", readyState: state } } : {},
+        });
+      }
+      if (tool === "vercel" && cmd.startsWith("deploy-hooks list")) {
+        return JSON.stringify({ hooks: [{ name: "production (migrate-prod.yml)", url: HOOK }] });
+      }
+      if (tool === "curl") return "";
+      throw new CliError(`${tool} ${cmd}`, 1, "unexpected call in test");
+    };
+    const cli: Cli = {
+      gh: respond("gh"),
+      neon: respond("neon"),
+      vercel: respond("vercel"),
+      pnpm: respond("pnpm"),
+      git: respond("git"),
+      curl: respond("curl"),
+    };
+    return { cli, calls };
+  }
+
+  it("is done once production has a READY or ERROR deployment", () => {
+    expect(firstProductionDeployStep.isDone(fakeContext(vercelCli(["ERROR"]).cli))).toBe(true);
+    expect(firstProductionDeployStep.isDone(fakeContext(vercelCli(["READY"]).cli))).toBe(true);
+    expect(firstProductionDeployStep.isDone(fakeContext(vercelCli([null]).cli))).toBe(false);
+    expect(firstProductionDeployStep.isDone(fakeContext(vercelCli(["BUILDING"]).cli))).toBe(false);
+  });
+
+  it("calls the deploy hook when there's no production deployment, with the URL on stdin only", () => {
+    const { cli, calls } = vercelCli([null, "ERROR"]);
+    firstProductionDeployStep.run(fakeContext(cli));
+    const posts = calls.filter((c) => c.tool === "curl");
+    expect(posts).toHaveLength(1);
+    expect(posts[0]?.args).toEqual(["-fsS", "-X", "POST", "-K", "-"]);
+    expect(posts[0]?.options?.input).toBe(`url = "${HOOK}"\n`);
+    for (const call of calls) expect(call.args.join(" ")).not.toContain("hook_first_prod");
+  });
+
+  it("waits for a build already under way instead of starting another", () => {
+    const { cli, calls } = vercelCli(["BUILDING", "READY"]);
+    firstProductionDeployStep.run(fakeContext(cli));
+    expect(calls.some((c) => c.tool === "curl")).toBe(false);
   });
 });
 

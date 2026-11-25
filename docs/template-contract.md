@@ -152,8 +152,14 @@ command.
 9. Set the Vercel `NEON_AUTH_COOKIE_SECRET` and `NEON_API_KEY`. Create the GitHub `production`
    environment, variables, secrets (including the production deploy hook), repo settings and
    ruleset (§5).
-10. Run `typecheck`, `lint`, `test` and `build` in the new app.
-11. Commit, push, and open the first PR.
+10. Make sure the Vercel project has a production deployment (`targets.production`). If it has
+    none, call the deploy hook, which builds `main`, and wait until that build is READY or ERROR.
+    Vercel makes a new project's first deployment production, whatever the branch, so without this
+    the PR would be built as production and fail. That production build usually fails on the
+    pending migrations, which is fine: any production deployment is enough
+    (`docs/decisions/0011-first-production-deploy-before-the-pr.md`).
+11. Run `typecheck`, `lint`, `test` and `build` in the new app.
+12. Commit, push, and open the first PR.
 
 **Ownership:** a same-named GitHub repo, Vercel project or Neon resource is adopted (provision) or
 deleted (deprovision) only if it's provably this app's:

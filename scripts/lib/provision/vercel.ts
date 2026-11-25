@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { CliError, parseJson, registerSecret } from "../cli";
-import type { Context, Step } from "./context";
+import { type Context, type Step, waitFor } from "./context";
 
 export type VercelProject = {
   id: string;
@@ -11,6 +11,8 @@ export type VercelProject = {
   link?: { type?: string; org?: string; repo?: string };
   gitProviderOptions?: { createDeployments?: string };
   protectionBypass?: Record<string, { scope?: string }>;
+  /** The latest deployment per target. A new project has `{}`. */
+  targets?: { production?: { id: string; readyState?: string } | null };
 };
 
 /** The app folder once it exists, else the template checkout (before the clone, in preflight). */
@@ -179,3 +181,47 @@ export function ensureDeployHook(ctx: Context): string {
   if (!url) throw new Error("`vercel deploy-hooks create` returned no hook URL.");
   return registerSecret(url);
 }
+
+/**
+ * Where the project's production deployment stands. READY and ERROR both count as "final": Vercel
+ * only needs one to exist. A cancelled one doesn't count, since that case is untested.
+ */
+export type ProductionDeployment = "none" | "building" | "final";
+
+export function productionDeployment(project: Pick<VercelProject, "targets"> | null): ProductionDeployment {
+  const production = project?.targets?.production;
+  if (!production || production.readyState === "CANCELED") return "none";
+  return production.readyState === "READY" || production.readyState === "ERROR" ? "final" : "building";
+}
+
+/** curl config (read from stdin with `-K -`) that POSTs to the hook, so its URL never shows up in argv. */
+export function deployHookRequest(url: string): string {
+  if (!new RegExp(`^${HOOK_URL.source}$`).test(url)) throw new Error("The deploy hook URL doesn't look like Vercel's.");
+  return `url = "${url}"\n`;
+}
+
+/**
+ * Vercel makes a new project's FIRST deployment production, whatever its branch
+ * (docs/decisions/0011). Git deploys of `main` are off (vercel.json), so without this the first
+ * deployment would be the `chore/provision` PR, built as production, and `vercel-build` would fail
+ * it on the pending migrations. The PR would then have a failed check and no preview. So build
+ * `main` through the deploy hook first, and wait for that build to finish. It fails while
+ * production has pending migrations, which is expected here: any production deployment, READY or
+ * ERROR, makes Vercel deploy later branches as previews.
+ */
+export const firstProductionDeployStep: Step = {
+  id: "vercel-first-production",
+  title: "A first production deployment of main (so the PR deploys as a preview)",
+  isDone: (ctx) => productionDeployment(getVercelProject(ctx)) === "final",
+  run(ctx) {
+    if (productionDeployment(getVercelProject(ctx)) === "none") {
+      ctx.cli.curl(["-fsS", "-X", "POST", "-K", "-"], { input: deployHookRequest(ensureDeployHook(ctx)) });
+      ctx.log.info("   Building main as production. It may fail on the pending migrations; either outcome is fine.");
+    }
+    waitFor(() => productionDeployment(getVercelProject(ctx)) === "final", {
+      timeoutMs: 15 * 60_000,
+      intervalMs: 10_000,
+      what: "the production deployment of main to finish (see the Vercel dashboard)",
+    });
+  },
+};

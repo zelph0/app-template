@@ -39,7 +39,13 @@ import { neonAuthStep, neonConnectionStep, neonFilesStep, neonResourceStep } fro
 import { parseProvisionArgs, USAGE } from "./lib/provision/options";
 import { checkExisting } from "./lib/provision/ownership";
 import { secretsStep, variablesStep, vercelBuildKeyStep } from "./lib/provision/secrets";
-import { cookieSecretStep, vercelGitStep, vercelProjectStep, vercelSettingsStep } from "./lib/provision/vercel";
+import {
+  cookieSecretStep,
+  firstProductionDeployStep,
+  vercelGitStep,
+  vercelProjectStep,
+  vercelSettingsStep,
+} from "./lib/provision/vercel";
 
 /** In order: each step may rely on facts recorded by the ones before it. */
 export const STEPS: Step[] = [
@@ -67,6 +73,7 @@ export const STEPS: Step[] = [
   secretsStep,
   repoSettingsStep,
   rulesetStep,
+  firstProductionDeployStep, // needs the project, its Git link and the deploy hook; before the PR is pushed
   verifyStep,
   pullRequestStep,
 ];
