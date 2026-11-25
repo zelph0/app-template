@@ -127,16 +127,24 @@ the options.
 2. Create the `chore/provision` branch and run `pnpm install`.
 3. Write the app identity to `template.config.ts`, then run `pnpm template:sync`.
 4. With `--no-auth`: run `pnpm auth:remove`. With `--theme-dir`: copy the theme files.
-5. Create the Vercel project, link the folder, and connect the repo.
-6. Add Neon through the Vercel-managed integration (production + preview), and write the
-   project files listed in §1.
-7. Set up Neon Auth on the production branch. This runs before any other branch exists, because
-   branches copy their parent's auth config.
+5. Create the Vercel project, link the folder, and connect the repo. Turn on GitHub deployment
+   events (`gitProviderOptions.createDeployments`), which `e2e-preview.yml` listens for. The
+   framework is pinned in `vercel.json`.
+6. Create the Neon database through the Vercel-managed integration (`--no-connect`). Then connect
+   it through the store connections API, for production + preview, with **a database branch per
+   preview deployment**: the CLI's own connect can't set that. Write the project files listed in §1.
+7. Set up Neon Auth on the production branch: enabled, providers, localhost. This runs before any
+   other branch exists, because branches copy their parent's auth config. Deployed URLs are
+   trusted later, by each build.
 8. Run `pnpm db:env`: creates the `dev` branch, writes `.env.local`, migrates and seeds.
 9. Set the Vercel `NEON_AUTH_COOKIE_SECRET` and `NEON_API_KEY`. Create the GitHub `production`
-   environment, variables, secrets, repo settings and ruleset (§5).
+   environment, variables, secrets (including the production deploy hook), repo settings and
+   ruleset (§5).
 10. Run `typecheck`, `lint`, `test` and `build` in the new app.
 11. Commit, push, and open the first PR.
+
+**Safety net:** `pnpm vercel-build` fails a preview whose `DATABASE_URL` is production's (which
+happens if preview branching is ever switched off) before migrating or seeding anything.
 
 Secrets are piped between CLIs through stdin; they never appear in argv or output.
 
