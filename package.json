@@ -27,6 +27,8 @@
     "template:sync": "tsx scripts/sync-template-config.ts",
     "template:check": "tsx scripts/sync-template-config.ts --check",
     "auth:remove": "tsx scripts/remove-auth.ts",
+    "provision": "tsx scripts/provision.ts",
+    "deprovision": "tsx scripts/deprovision.ts",
     "vercel-build": "tsx scripts/vercel-build.ts"
   },
   "dependencies": {
@@ -71,6 +73,7 @@
     "tailwindcss": "4.3.5",
     "tsx": "4.23.15",
     "typescript": "5.9.3",
+    "vercel": "66.6.0",
     "vitest": "5.1.1"
   },
   "packageManager": "pnpm@12.23.0",
