@@ -22,12 +22,18 @@ Files that can't import TypeScript are kept in sync by `pnpm template:sync`:
 
 `pnpm template:check` (run in CI) fails if they drift.
 
-**Provisioning:** rewrite `templateConfig` in `template.config.ts`, then run `pnpm template:sync`.
+**Provisioning:** rewrite the `name`, `slug` and `description` values in `templateConfig`
+(`scripts/lib/template-config.ts`), then run `pnpm template:sync`. Keep each on its own
+`key: "value",` line; the rewrite fails loudly otherwise.
 
 Per-environment values are **not** placeholders: database URLs, Neon Auth URL, Sentry DSN and
 the like come from env vars (`.env.example`, validated in `src/env.ts`). Also written by
-provisioning: `neon.project.json` (Neon project id, production branch name/id, dev/test
-branch names; not secret).
+provisioning (not secret):
+
+- `neon.project.json`: Neon project id, production branch name/id, dev/test branch names. Read by the
+  db scripts and the `neon-guard` hook.
+- `.mcp.json`: the Neon MCP URL's `projectId=`.
+- `.neon` (gitignored): local Neon CLI context, pinned to the `dev` branch.
 
 ## 2. Removable auth module
 
@@ -93,10 +99,44 @@ steps, never shipped in the base. Where they go:
 | Where | Name | Set by |
 |---|---|---|
 | GitHub variable | `NEON_PROJECT_ID` | provisioning |
-| GitHub secret | `NEON_API_KEY` | provisioning (CI branch per run) |
-| GitHub secret | `PROD_DATABASE_URL_UNPOOLED` | provisioning (production migrations) |
+| GitHub secret | `NEON_API_KEY` | provisioning: Neon key scoped to the project (CI branch per run) |
+| GitHub env secret (`production`) | `PROD_DATABASE_URL_UNPOOLED` | provisioning (production migrations; the environment only deploys from `main`) |
 | GitHub variables | `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` | provisioning (enables production deploy + preview e2e) |
-| GitHub secrets | `VERCEL_TOKEN`, `VERCEL_AUTOMATION_BYPASS_SECRET` | provisioning |
-| GitHub secret | `CLAUDE_CODE_OAUTH_TOKEN` | `/install-github-app` |
-| Vercel env | `NEON_AUTH_COOKIE_SECRET` (all envs), `SENTRY_DSN`, `RESEND_API_KEY` (optional) | provisioning |
-| Neon Auth | trusted domains: production domain + `https://*-<team>.vercel.app` | provisioning |
+| GitHub secrets | `VERCEL_TOKEN` (scoped to the project), `VERCEL_AUTOMATION_BYPASS_SECRET` | provisioning |
+| GitHub secret | `CLAUDE_CODE_OAUTH_TOKEN` | `/install-github-app` (manual: no CLI can fetch it) |
+| GitHub ruleset | `protect-main`: PR required; checks `checks`, `secret scan`, `db-e2e (auth)`, `db-e2e (noauth)` | provisioning |
+| Vercel env | `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `NEON_AUTH_BASE_URL` (production + per preview) | the Vercel-managed Neon integration |
+| Vercel env | `NEON_AUTH_COOKIE_SECRET` (production, preview) | provisioning |
+| Vercel env | `SENTRY_DSN`, `RESEND_API_KEY`, `EMAIL_FROM` (optional) | you, when the app needs them |
+| Neon Auth (production branch) | providers; trusted domains `https://<slug>.vercel.app` + `https://*-<team>.vercel.app`; localhost allowed (CI and local tests branch from it) | provisioning |
+
+If a required check is renamed in `ci.yml`, update `REQUIRED_CHECKS` in
+`scripts/lib/provision/github.ts` (a unit test compares them).
+
+## 6. Provisioning (`pnpm provision <slug>`)
+
+`scripts/provision.ts` runs these steps in order. Each step checks real state first, so a re-run
+skips finished steps (`↷ already done`) and resumes after a failure. `pnpm provision --help` lists
+the options.
+
+1. Create the GitHub repo from the template and clone it to `../<slug>`. Cancel the doomed CI run
+   on the template's initial commit.
+2. Create the `chore/provision` branch and run `pnpm install`.
+3. Write the app identity to `template.config.ts`, then run `pnpm template:sync`.
+4. With `--no-auth`: run `pnpm auth:remove`. With `--theme-dir`: copy the theme files.
+5. Create the Vercel project, link the folder, and connect the repo.
+6. Add Neon through the Vercel-managed integration (production + preview), and write the
+   project files listed in §1.
+7. Set up Neon Auth on the production branch. This runs before any other branch exists, because
+   branches copy their parent's auth config.
+8. Run `pnpm db:env`: creates the `dev` branch, writes `.env.local`, migrates and seeds.
+9. Set the Vercel `NEON_AUTH_COOKIE_SECRET`. Create the GitHub `production` environment,
+   variables, secrets, repo settings and ruleset (§5).
+10. Run `typecheck`, `lint`, `test` and `build` in the new app.
+11. Commit, push, and open the first PR.
+
+Secrets are piped between CLIs through stdin; they never appear in argv or output.
+
+`pnpm deprovision <slug>` undoes it after a typed confirmation: the Neon resource, the Vercel
+project, the scoped tokens and keys, and the GitHub repo. Why the Vercel-managed integration:
+`docs/decisions/0009-vercel-managed-neon-and-public-repos.md`.

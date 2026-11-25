@@ -103,9 +103,8 @@ describe("REQUIRED_CHECKS", () => {
         .match(/variant: \[(.+)\]/)?.[1]
         ?.split(",")
         .map((v) => v.trim()) ?? [];
-    const jobs = names.flatMap((n) =>
-      n.includes("${{ matrix.variant }}") ? variants.map((v) => n.replace("${{ matrix.variant }}", v)) : [n],
-    );
+    const matrix = /\$\{\{ matrix\.variant \}\}/;
+    const jobs = names.flatMap((n) => (matrix.test(n) ? variants.map((v) => n.replace(matrix, v)) : [n]));
     expect([...jobs].sort()).toEqual([...REQUIRED_CHECKS].sort());
   });
 });

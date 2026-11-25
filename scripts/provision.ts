@@ -144,6 +144,12 @@ function main() {
     "\nOne manual step left: in Claude Code inside the app, run `/install-github-app` (adds CLAUDE_CODE_OAUTH_TOKEN for @claude).",
   );
   log.info("Merge the PR when CI is green: that migrates production and deploys it.");
+  if (ctx.opts.providers.length > 0) {
+    log.info(
+      `Before real users: give production its own OAuth client for ${ctx.opts.providers.join(", ")} ` +
+        "(`neon neon-auth oauth-provider update`); the shared one is for dev and previews (decision 0002).",
+    );
+  }
   if (ctx.opts.json) console.info(JSON.stringify({ ...result, steps: outcomes }, null, 2));
 }
 
