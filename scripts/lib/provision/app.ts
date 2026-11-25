@@ -1,5 +1,5 @@
 /** Steps that change the new app's files (identity, auth module, theme), check it, and open the PR. */
-import { copyFileSync, existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { succeeds } from "../cli";
 import { renderTemplateConfig } from "../template-config";
@@ -68,6 +68,18 @@ export const identityStep: Step = {
     const file = inApp(ctx, "template.config.ts");
     writeFileSync(file, renderTemplateConfig(readFileSync(file, "utf8"), identityOf(ctx)));
     ctx.cli.pnpm(["template:sync"], { cwd: ctx.appDir });
+  },
+};
+
+/** Files that only make sense in the template itself (the /new-app skill source, the build spec). */
+export const TEMPLATE_ONLY = ["skills", "TEMPLATE_SPEC.md"];
+
+export const templateOnlyStep: Step = {
+  id: "template-only",
+  title: "Remove template-only files (skills/, TEMPLATE_SPEC.md)",
+  isDone: (ctx) => TEMPLATE_ONLY.every((path) => !existsSync(inApp(ctx, path))),
+  run(ctx) {
+    for (const path of TEMPLATE_ONLY) rmSync(inApp(ctx, path), { recursive: true, force: true });
   },
 };
 
